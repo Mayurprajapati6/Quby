@@ -13,10 +13,1048 @@ datasource db {
   provider = "postgresql"
 }
 
+//ENUMS
+
+enum UserRole {
+  CUSTOMER
+  STAFF
+  PROVIDER
+  ADMIN
+}
+
+enum ProviderType {
+  SALON
+  SPA
+}
+
+enum ServiceFor {
+  MEN
+  UNISEX
+}
+
+enum BookingStatus {
+  PENDING_PAYMENT
+  CONFIRMED
+  CHECKED_IN
+  IN_PROGRESS
+  COMPLETED
+  CANCELLED
+  CANCELLED_TIMEOUT
+  CANCELLED_NO_SHOW
+  REFUNDED
+}
+
+enum TransactionStatus {
+  PENDING
+  SUCCESS
+  FAILED
+  REFUNDED
+}
+
+enum EscrowStatus {
+  HELD
+  RELEASED
+  REFUNDED
+}
+
+enum RefundStatus {
+  PROCESSING
+  SUCCESS
+  FAILED
+}
+
+enum LeaveStatus {
+  PENDING
+  APPROVED
+  REJECTED
+}
+
+enum BookingEventType {
+  BOOKING_CREATED
+  PAYMENT_INITIATED
+  PAYMENT_SUCCESS
+  PAYMENT_FAILED
+  BOOKING_CONFIRMED
+  CUSTOMER_REMINDED
+  CUSTOMER_CHECKED_IN
+  SERVICE_STARTED
+  SERVICE_COMPLETED
+  BOOKING_CANCELLED
+  BOOKING_NO_SHOW
+  MONEY_RELEASED
+}
+
+enum NotificationType {
+  BOOKING_CREATED
+  BOOKING_CONFIRMED
+  PAYMENT_SUCCESS
+  PAYMENT_FAILED
+  REMINDER_1_HOUR
+  REMINDER_15_MIN
+  YOUR_TURN_SOON
+  SERVICE_READY
+  SERVICE_COMPLETED
+  BOOKING_CANCELLED
+  REFUND_PROCESSED
+  REVIEW_REQUEST
+}
+
+enum ProviderNotificationType {
+  NEW_BOOKING
+  BOOKING_CANCELLED
+  STAFF_LEAVE_REQUEST
+  NEW_REVIEW
+  PAYMENT_RECEIVED
+  LOW_RATING_ALERT
+}
+
+enum StaffNotificationType {
+  NEW_BOOKING
+  BOOKING_CANCELLED
+  CUSTOMER_CHECKED_IN
+  NEXT_CUSTOMER_READY
+  LEAVE_APPROVED
+  LEAVE_REJECTED
+  NEW_REVIEW
+  DAILY_SUMMARY
+  PAYMENT_RECEIVED
+}
+
+enum WalletTransactionType {
+  BOOKING_PAYMENT
+  REFUND
+}
+
+enum ProviderWalletTransactionType {
+  ESCROW_RELEASE
+  PLATFORM_FEE
+}
+
+enum StaffWalletTransactionType {
+  EARNING
+}
 
 model User {
-  id        String   @id @default(uuid())
-  email     String   @unique
-  name      String?
-  createdAt DateTime @default(now())
+  id            String @id @default(uuid())
+  name          String @db.VarChar(100)
+  email         String @unique @db.VarChar(255)
+  phone         String @unique @db.VarChar(20)
+  password_hash String @db.VarChar(255)
+
+  role UserRole @default(CUSTOMER)
+
+  is_active         Boolean   @default(true)
+  is_verified       Boolean   @default(false)
+  email_verified_at DateTime?
+  phone_verified_at DateTime?
+
+  avatar_url    String?   @db.VarChar(500)
+  date_of_birth DateTime? @db.Date
+  gender        String?   @db.VarChar(20)
+
+  address_line1 String? @db.VarChar(255)
+  address_line2 String? @db.VarChar(255)
+  city          String? @db.VarChar(100)
+  state         String? @db.VarChar(100)
+  pincode       String? @db.VarChar(10)
+  country       String? @db.VarChar(100)
+
+  version Int @default(1)
+
+  created_at    DateTime  @default(now()) @db.Timestamptz(3)
+  updated_at    DateTime  @updatedAt @db.Timestamptz(3)
+  last_login_at DateTime? @db.Timestamptz(3)
+
+  refresh_tokens            RefreshToken[]
+  password_reset_tokens     PasswordResetToken[]
+  email_verification_tokens EmailVerificationToken[]
+  bookings                  Booking[]
+  notifications             Notification[]
+  wallet                    UserWallet?
+  transactions              Transaction[]            @relation("CustomerTransactions")
+
+  @@index([email])
+  @@index([phone])
+  @@index([created_at])
+  @@index([role, is_active])
+  @@map("users")
+}
+
+model RefreshToken {
+  id         String    @id @default(uuid())
+  user_id    String
+  token      String    @unique @db.VarChar(500)
+  expires_at DateTime  @db.Timestamptz(3)
+  is_used    Boolean   @default(false)
+  used_at    DateTime? @db.Timestamptz(3)
+  is_revoked Boolean   @default(false)
+  revoked_at DateTime? @db.Timestamptz(3)
+  ip_address String?   @db.VarChar(45)
+  user_agent String?   @db.Text
+  created_at DateTime  @default(now()) @db.Timestamptz(3)
+
+  user User @relation(fields: [user_id], references: [id], onDelete: Cascade)
+
+  @@index([user_id])
+  @@index([token])
+  @@index([expires_at])
+  @@map("refresh_tokens")
+}
+
+model PasswordResetToken {
+  id         String    @id @default(uuid())
+  user_id    String
+  token      String    @unique @db.VarChar(255)
+  expires_at DateTime  @db.Timestamptz(3)
+  is_used    Boolean   @default(false)
+  used_at    DateTime? @db.Timestamptz(3)
+  created_at DateTime  @default(now()) @db.Timestamptz(3)
+
+  user User @relation(fields: [user_id], references: [id], onDelete: Cascade)
+
+  @@index([user_id])
+  @@index([token])
+  @@map("password_reset_tokens")
+}
+
+model EmailVerificationToken {
+  id         String    @id @default(uuid())
+  user_id    String
+  token      String    @unique @db.VarChar(255)
+  expires_at DateTime  @db.Timestamptz(3)
+  is_used    Boolean   @default(false)
+  used_at    DateTime? @db.Timestamptz(3)
+  created_at DateTime  @default(now()) @db.Timestamptz(3)
+
+  user User @relation(fields: [user_id], references: [id], onDelete: Cascade)
+
+  @@index([user_id])
+  @@index([token])
+  @@map("email_verification_tokens")
+}
+
+model UserWallet {
+  id      String @id @default(uuid())
+  user_id String @unique
+
+  balance  Int    @default(0)
+  currency String @default("INR") @db.VarChar(3)
+
+  created_at DateTime @default(now()) @db.Timestamptz(3)
+  updated_at DateTime @updatedAt @db.Timestamptz(3)
+
+  user         User                @relation(fields: [user_id], references: [id], onDelete: Cascade)
+  transactions WalletTransaction[]
+
+  @@index([user_id])
+  @@map("user_wallets")
+}
+
+model WalletTransaction {
+  id        String @id @default(uuid())
+  wallet_id String
+
+  type          WalletTransactionType
+  amount        Int
+  balance_after Int
+
+  booking_id     String?
+  transaction_id String?
+
+  description String @db.VarChar(255)
+  metadata    Json?  @db.JsonB
+
+  created_at DateTime @default(now()) @db.Timestamptz(3)
+
+  wallet UserWallet @relation(fields: [wallet_id], references: [id], onDelete: Cascade)
+
+  @@index([wallet_id, created_at])
+  @@index([booking_id])
+  @@map("wallet_transactions")
+}
+
+model PlatformService {
+  id String @id @default(uuid())
+
+  name        String       @db.VarChar(200)
+  description String?      @db.Text
+  category    ProviderType
+  service_for ServiceFor
+
+  default_duration Int
+  default_price    Int?
+
+  is_active  Boolean @default(true)
+  sort_order Int     @default(0)
+
+  created_at DateTime @default(now()) @db.Timestamptz(3)
+  updated_at DateTime @updatedAt @db.Timestamptz(3)
+
+  provider_offerings ProviderServiceOffering[]
+
+  @@index([category, service_for])
+  @@index([is_active])
+  @@map("platform_services")
+}
+
+model Provider {
+  id String @id @default(uuid())
+
+  business_name String       @db.VarChar(200)
+  provider_type ProviderType
+  service_for   ServiceFor
+  description   String?      @db.Text
+
+  owner_name  String @db.VarChar(100)
+  owner_email String @unique @db.VarChar(255)
+  owner_phone String @unique @db.VarChar(20)
+
+  address_line1 String  @db.VarChar(255)
+  address_line2 String? @db.VarChar(255)
+  city          String  @db.VarChar(100)
+  state         String  @db.VarChar(100)
+  pincode       String  @db.VarChar(10)
+  country       String  @default("India") @db.VarChar(100)
+
+  latitude  Float?
+  longitude Float?
+
+  business_email String? @db.VarChar(255)
+  business_phone String? @db.VarChar(20)
+  website_url    String? @db.VarChar(500)
+
+  logo_url        String? @db.VarChar(500)
+  cover_image_url String? @db.VarChar(500)
+
+  is_verified Boolean   @default(false)
+  verified_at DateTime? @db.Timestamptz(3)
+
+  gst_number String? @db.VarChar(50)
+  pan_number String? @db.VarChar(20)
+
+  is_active Boolean @default(true)
+
+  working_hours Json @db.JsonB
+  closed_days   Json @default("[]") @db.JsonB
+
+  average_rating Float? @default(0)
+  total_reviews  Int    @default(0)
+
+  created_at DateTime @default(now()) @db.Timestamptz(3)
+  updated_at DateTime @updatedAt @db.Timestamptz(3)
+
+  staff         Staff[]
+  services      ProviderServiceOffering[]
+  bookings      Booking[]
+  reviews       Review[]
+  wallet        ProviderWallet?
+  holidays      Holiday[]
+  notifications ProviderNotification[]
+  images        ProviderImage[]
+  history       ProviderHistory[]
+
+  @@index([owner_email])
+  @@index([owner_phone])
+  @@index([city, state])
+  @@index([provider_type, service_for])
+  @@index([is_verified, is_active])
+  @@index([latitude, longitude])
+  @@map("providers")
+}
+
+model ProviderImage {
+  id          String @id @default(uuid())
+  provider_id String
+
+  image_url String  @db.VarChar(500)
+  public_id String? @db.VarChar(255)
+
+  thumbnail_url String? @db.VarChar(500)
+  medium_url    String? @db.VarChar(500)
+
+  is_primary Boolean @default(false)
+  sort_order Int     @default(0)
+
+  caption String? @db.VarChar(255)
+
+  created_at DateTime @default(now()) @db.Timestamptz(3)
+
+  provider Provider @relation(fields: [provider_id], references: [id], onDelete: Cascade)
+
+  @@index([provider_id])
+  @@index([is_primary])
+  @@map("provider_images")
+}
+
+model ProviderHistory {
+  id          String @id @default(uuid())
+  provider_id String
+
+  snapshot_data Json    @db.JsonB
+  changed_by    String
+  change_type   String  @db.VarChar(50)
+  reason        String? @db.Text
+
+  created_at DateTime @default(now()) @db.Timestamptz(3)
+
+  provider Provider @relation(fields: [provider_id], references: [id], onDelete: Cascade)
+
+  @@index([provider_id])
+  @@index([created_at])
+  @@map("provider_history")
+}
+
+model Holiday {
+  id          String @id @default(uuid())
+  provider_id String
+
+  holiday_date DateTime @db.Date
+  holiday_name String   @db.VarChar(100)
+  description  String?  @db.Text
+
+  applies_to_all_staff Boolean @default(true)
+
+  created_at DateTime @default(now()) @db.Timestamptz(3)
+
+  provider       Provider       @relation(fields: [provider_id], references: [id], onDelete: Cascade)
+  staff_holidays StaffHoliday[]
+
+  @@index([provider_id, holiday_date])
+  @@map("holidays")
+}
+
+model StaffHoliday {
+  id         String @id @default(uuid())
+  holiday_id String
+  staff_id   String
+
+  created_at DateTime @default(now()) @db.Timestamptz(3)
+
+  holiday Holiday @relation(fields: [holiday_id], references: [id], onDelete: Cascade)
+  staff   Staff   @relation(fields: [staff_id], references: [id], onDelete: Cascade)
+
+  @@unique([holiday_id, staff_id])
+  @@map("staff_holidays")
+}
+
+model ProviderNotification {
+  id          String @id @default(uuid())
+  provider_id String
+
+  type    ProviderNotificationType
+  title   String                   @db.VarChar(200)
+  message String                   @db.Text
+
+  data       Json?   @db.JsonB
+  action_url String? @db.VarChar(500)
+
+  is_read Boolean   @default(false)
+  read_at DateTime? @db.Timestamptz(3)
+
+  created_at DateTime @default(now()) @db.Timestamptz(3)
+
+  provider Provider @relation(fields: [provider_id], references: [id], onDelete: Cascade)
+
+  @@index([provider_id, created_at])
+  @@index([provider_id, is_read])
+  @@index([created_at])
+  @@map("provider_notifications")
+}
+
+model ProviderWallet {
+  id          String @id @default(uuid())
+  provider_id String @unique
+
+  balance  Int    @default(0)
+  currency String @default("INR") @db.VarChar(3)
+
+  lifetime_earnings Int @default(0)
+
+  version Int @default(1)
+
+  created_at DateTime @default(now()) @db.Timestamptz(3)
+  updated_at DateTime @updatedAt @db.Timestamptz(3)
+
+  provider     Provider                    @relation(fields: [provider_id], references: [id], onDelete: Cascade)
+  transactions ProviderWalletTransaction[]
+
+  @@index([provider_id])
+  @@map("provider_wallets")
+}
+
+model ProviderWalletTransaction {
+  id        String @id @default(uuid())
+  wallet_id String
+
+  type          ProviderWalletTransactionType
+  amount        Int
+  balance_after Int
+
+  booking_id String?
+  escrow_id  String?
+
+  description String @db.VarChar(255)
+  metadata    Json?  @db.JsonB
+
+  created_at DateTime @default(now()) @db.Timestamptz(3)
+
+  wallet ProviderWallet @relation(fields: [wallet_id], references: [id], onDelete: Cascade)
+
+  @@index([wallet_id, created_at])
+  @@index([booking_id])
+  @@map("provider_wallet_transactions")
+}
+
+model Staff {
+  id          String @id @default(uuid())
+  provider_id String
+
+  name  String @db.VarChar(100)
+  phone String @unique @db.VarChar(20)
+
+  password_hash    String? @db.VarChar(255)
+  email            String? @db.VarChar(255)
+  avatar_url       String? @db.VarChar(500)
+  bio              String? @db.Text
+  specialization   String? @db.VarChar(200)
+  experience_years Int?
+
+  is_active   Boolean @default(true)
+  is_verified Boolean @default(false)
+
+  average_rating Float? @default(0)
+  total_reviews  Int    @default(0)
+
+  created_at DateTime @default(now()) @db.Timestamptz(3)
+  updated_at DateTime @updatedAt @db.Timestamptz(3)
+
+  provider Provider @relation(fields: [provider_id], references: [id], onDelete: Cascade)
+
+  bookings       Booking[]
+  schedules      StaffSchedule[]
+  leaves         StaffLeave[]
+  queues         DailyQueue[]
+  services       StaffService[]
+  reviews        Review[]
+  wallet         StaffWallet?
+  staff_holidays StaffHoliday[]
+  notifications  StaffNotification[]
+
+  @@index([provider_id])
+  @@index([provider_id, is_active])
+  @@index([phone])
+  @@map("staff")
+}
+
+model StaffNotification {
+  id       String @id @default(uuid())
+  staff_id String
+
+  type    StaffNotificationType
+  title   String                @db.VarChar(200)
+  message String                @db.Text
+
+  data       Json?   @db.JsonB
+  action_url String? @db.VarChar(500)
+
+  is_read Boolean   @default(false)
+  read_at DateTime? @db.Timestamptz(3)
+
+  created_at DateTime @default(now()) @db.Timestamptz(3)
+
+  staff Staff @relation(fields: [staff_id], references: [id], onDelete: Cascade)
+
+  @@index([staff_id, created_at])
+  @@index([staff_id, is_read])
+  @@index([created_at])
+  @@map("staff_notifications")
+}
+
+model StaffWallet {
+  id       String @id @default(uuid())
+  staff_id String @unique
+
+  balance  Int    @default(0)
+  currency String @default("INR") @db.VarChar(3)
+
+  lifetime_earnings Int @default(0)
+
+  version Int @default(1)
+
+  created_at DateTime @default(now()) @db.Timestamptz(3)
+  updated_at DateTime @updatedAt @db.Timestamptz(3)
+
+  staff        Staff                    @relation(fields: [staff_id], references: [id], onDelete: Cascade)
+  transactions StaffWalletTransaction[]
+
+  @@index([staff_id])
+  @@map("staff_wallets")
+}
+
+model StaffWalletTransaction {
+  id        String @id @default(uuid())
+  wallet_id String
+
+  type          StaffWalletTransactionType
+  amount        Int
+  balance_after Int
+
+  booking_id String?
+
+  description String @db.VarChar(255)
+  metadata    Json?  @db.JsonB
+
+  created_at DateTime @default(now()) @db.Timestamptz(3)
+
+  wallet StaffWallet @relation(fields: [wallet_id], references: [id], onDelete: Cascade)
+
+  @@index([wallet_id, created_at])
+  @@index([booking_id])
+  @@map("staff_wallet_transactions")
+}
+
+model StaffSchedule {
+  id       String @id @default(uuid())
+  staff_id String
+
+  date DateTime @db.Date
+
+  start_time String @db.VarChar(5)
+  end_time   String @db.VarChar(5)
+
+  is_available Boolean @default(true)
+
+  created_at DateTime @default(now()) @db.Timestamptz(3)
+  updated_at DateTime @updatedAt @db.Timestamptz(3)
+
+  staff Staff @relation(fields: [staff_id], references: [id], onDelete: Cascade)
+
+  @@unique([staff_id, date])
+  @@index([staff_id, date])
+  @@map("staff_schedules")
+}
+
+model StaffLeave {
+  id       String @id @default(uuid())
+  staff_id String
+
+  leave_date DateTime @db.Date
+
+  reason     String @db.Text
+  leave_type String @db.VarChar(50)
+
+  status LeaveStatus @default(PENDING)
+
+  approved_by String?
+  approved_at DateTime? @db.Timestamptz(3)
+
+  created_at DateTime @default(now()) @db.Timestamptz(3)
+  updated_at DateTime @updatedAt @db.Timestamptz(3)
+
+  staff Staff @relation(fields: [staff_id], references: [id], onDelete: Cascade)
+
+  @@index([staff_id, leave_date])
+  @@index([status])
+  @@map("staff_leaves")
+}
+
+model ProviderServiceOffering {
+  id                  String @id @default(uuid())
+  provider_id         String
+  platform_service_id String
+
+  price            Int
+  discounted_price Int?
+
+  break_time_minutes Int @default(5)
+
+  image_url String? @db.VarChar(500)
+
+  is_active   Boolean @default(true)
+  is_featured Boolean @default(false)
+
+  booking_count Int @default(0)
+
+  created_at DateTime @default(now()) @db.Timestamptz(3)
+  updated_at DateTime @updatedAt @db.Timestamptz(3)
+
+  provider         Provider        @relation(fields: [provider_id], references: [id], onDelete: Cascade)
+  platform_service PlatformService @relation(fields: [platform_service_id], references: [id], onDelete: Restrict)
+
+  staff_services StaffService[]
+
+  @@unique([provider_id, platform_service_id])
+  @@index([provider_id])
+  @@index([platform_service_id])
+  @@index([provider_id, is_active])
+  @@map("provider_service_offerings")
+}
+
+model StaffService {
+  id                  String @id @default(uuid())
+  staff_id            String
+  service_offering_id String
+
+  duration_minutes Int
+
+  custom_price Int?
+
+  is_available Boolean @default(true)
+
+  created_at DateTime @default(now()) @db.Timestamptz(3)
+
+  staff            Staff                   @relation(fields: [staff_id], references: [id], onDelete: Cascade)
+  service_offering ProviderServiceOffering @relation(fields: [service_offering_id], references: [id], onDelete: Cascade)
+
+  @@unique([staff_id, service_offering_id])
+  @@index([staff_id])
+  @@index([service_offering_id])
+  @@map("staff_services")
+}
+
+model Booking {
+  id String @id @default(uuid())
+
+  booking_number  String @unique @db.VarChar(20)
+  idempotency_key String @unique @db.VarChar(100)
+
+  user_id     String
+  provider_id String
+  staff_id    String
+
+  service_date DateTime @db.Date
+  queue_number Int
+
+  arrival_window_start DateTime @db.Timestamptz(3)
+  arrival_window_end   DateTime @db.Timestamptz(3)
+  service_start_time   DateTime @db.Timestamptz(3)
+  service_end_time     DateTime @db.Timestamptz(3)
+
+  checked_in_at        DateTime? @db.Timestamptz(3)
+  service_started_at   DateTime? @db.Timestamptz(3)
+  service_completed_at DateTime? @db.Timestamptz(3)
+
+  services Json @db.JsonB
+
+  total_duration Int
+
+  service_amount Int
+  platform_fee   Int
+  total_amount   Int
+
+  transaction Transaction?
+
+  status BookingStatus @default(PENDING_PAYMENT)
+
+  cancelled_at        DateTime? @db.Timestamptz(3)
+  cancelled_by        String?
+  cancellation_reason String?   @db.Text
+
+  notes String? @db.Text
+
+  version Int @default(1)
+
+  created_at DateTime @default(now()) @db.Timestamptz(3)
+  updated_at DateTime @updatedAt @db.Timestamptz(3)
+
+  user     User     @relation(fields: [user_id], references: [id], onDelete: Restrict)
+  provider Provider @relation(fields: [provider_id], references: [id], onDelete: Restrict)
+  staff    Staff    @relation(fields: [staff_id], references: [id], onDelete: Restrict)
+
+  events        BookingEvent[]
+  qr_code       QRCode?
+  service_timer ServiceTimer?
+  escrow        EscrowTransaction?
+  review        Review?
+
+  @@unique([staff_id, service_date, queue_number], name: "unique_queue_position")
+  @@index([user_id, created_at])
+  @@index([staff_id, service_date])
+  @@index([provider_id, service_date])
+  @@index([status])
+  @@index([booking_number])
+  @@index([idempotency_key])
+  @@map("bookings")
+}
+
+model DailyQueue {
+  id           String   @id @default(uuid())
+  staff_id     String
+  service_date DateTime @db.Date
+
+  queue_data Json @default("[]") @db.JsonB
+
+  last_queue_number Int @default(0)
+
+  version Int @default(1)
+
+  created_at DateTime @default(now()) @db.Timestamptz(3)
+  updated_at DateTime @updatedAt @db.Timestamptz(3)
+
+  staff Staff @relation(fields: [staff_id], references: [id], onDelete: Cascade)
+
+  @@unique([staff_id, service_date])
+  @@index([staff_id, service_date])
+  @@map("daily_queues")
+}
+
+model BookingEvent {
+  id         String @id @default(uuid())
+  booking_id String
+
+  event_type BookingEventType
+  event_data Json             @db.JsonB
+
+  user_id String?
+
+  created_at DateTime @default(now()) @db.Timestamptz(3)
+
+  booking Booking @relation(fields: [booking_id], references: [id], onDelete: Cascade)
+
+  @@index([booking_id, created_at])
+  @@index([event_type])
+  @@map("booking_events")
+}
+
+model QRCode {
+  id         String @id @default(uuid())
+  booking_id String @unique
+
+  qr_code_id String @unique @db.VarChar(50)
+
+  qr_data      String @db.Text
+  qr_image_url String @db.Text
+
+  is_used       Boolean   @default(false)
+  used_at       DateTime? @db.Timestamptz(3)
+  used_by_staff String?
+
+  expires_at DateTime @db.Timestamptz(3)
+
+  created_at DateTime @default(now()) @db.Timestamptz(3)
+
+  booking Booking @relation(fields: [booking_id], references: [id], onDelete: Cascade)
+
+  @@index([qr_code_id])
+  @@index([is_used])
+  @@map("qr_codes")
+}
+
+model ServiceTimer {
+  id         String @id @default(uuid())
+  booking_id String @unique
+
+  started_at    DateTime  @db.Timestamptz(3)
+  estimated_end DateTime  @db.Timestamptz(3)
+  actual_end    DateTime? @db.Timestamptz(3)
+
+  booking Booking @relation(fields: [booking_id], references: [id], onDelete: Cascade)
+
+  @@map("service_timers")
+}
+
+model Transaction {
+  id String @id @default(uuid())
+
+  booking_id String @unique
+
+  user_id     String
+  provider_id String
+  staff_id    String
+
+  razorpay_order_id   String  @unique @db.VarChar(100)
+  razorpay_payment_id String? @unique @db.VarChar(100)
+  razorpay_signature  String? @db.VarChar(500)
+
+  amount   Int
+  currency String @default("INR") @db.VarChar(3)
+
+  payment_method String? @db.VarChar(50)
+
+  status TransactionStatus @default(PENDING)
+
+  created_at DateTime  @default(now()) @db.Timestamptz(3)
+  paid_at    DateTime? @db.Timestamptz(3)
+  failed_at  DateTime? @db.Timestamptz(3)
+
+  failure_reason String? @db.Text
+
+  booking Booking @relation(fields: [booking_id], references: [id], onDelete: Cascade)
+  user    User    @relation("CustomerTransactions", fields: [user_id], references: [id], onDelete: Restrict)
+
+  platform_fee PlatformFeeTransaction?
+  escrow       EscrowTransaction?
+  refund       Refund?
+
+  @@index([status])
+  @@index([razorpay_order_id])
+  @@index([user_id, created_at])
+  @@index([booking_id])
+  @@map("transactions")
+}
+
+model PlatformFeeTransaction {
+  id             String @id @default(uuid())
+  transaction_id String @unique
+  booking_id     String
+  provider_id    String
+
+  amount Int
+  status String @default("COLLECTED") @db.VarChar(20)
+
+  collected_at DateTime @db.Timestamptz(3)
+
+  is_refundable Boolean @default(false)
+
+  transaction Transaction @relation(fields: [transaction_id], references: [id], onDelete: Cascade)
+
+  @@index([collected_at])
+  @@index([provider_id])
+  @@map("platform_fee_transactions")
+}
+
+model EscrowTransaction {
+  id             String @id @default(uuid())
+  transaction_id String @unique
+  booking_id     String @unique
+  provider_id    String
+  staff_id       String
+
+  amount Int
+
+  status EscrowStatus @default(HELD)
+
+  held_at DateTime @db.Timestamptz(3)
+
+  scheduled_release_at DateTime  @db.Timestamptz(3)
+  released_at          DateTime? @db.Timestamptz(3)
+  refunded_at          DateTime? @db.Timestamptz(3)
+
+  transaction Transaction @relation(fields: [transaction_id], references: [id], onDelete: Cascade)
+  booking     Booking     @relation(fields: [booking_id], references: [id], onDelete: Cascade)
+
+  @@index([status])
+  @@index([scheduled_release_at])
+  @@map("escrow_transactions")
+}
+
+model Refund {
+  id             String @id @default(uuid())
+  transaction_id String @unique
+
+  razorpay_refund_id String @unique @db.VarChar(100)
+
+  amount Int
+
+  status RefundStatus @default(PROCESSING)
+
+  created_at   DateTime  @default(now()) @db.Timestamptz(3)
+  processed_at DateTime? @db.Timestamptz(3)
+
+  transaction Transaction @relation(fields: [transaction_id], references: [id], onDelete: Cascade)
+
+  @@index([status])
+  @@map("refunds")
+}
+
+model Notification {
+  id      String @id @default(uuid())
+  user_id String
+
+  type    NotificationType
+  title   String           @db.VarChar(200)
+  message String           @db.Text
+
+  data       Json?   @db.JsonB
+  action_url String? @db.VarChar(500)
+
+  is_read Boolean   @default(false)
+  read_at DateTime? @db.Timestamptz(3)
+
+  created_at DateTime @default(now()) @db.Timestamptz(3)
+
+  user User @relation(fields: [user_id], references: [id], onDelete: Cascade)
+
+  @@index([user_id, created_at])
+  @@index([user_id, is_read])
+  @@index([created_at])
+  @@map("notifications")
+}
+
+model Review {
+  id          String @id @default(uuid())
+  booking_id  String @unique
+  user_id     String
+  provider_id String
+  staff_id    String
+
+  staff_rating    Int
+  provider_rating Int
+  overall_rating  Int
+
+  staff_comment    String? @db.Text
+  provider_comment String? @db.Text
+
+  images Json? @db.JsonB
+
+  is_verified Boolean @default(false)
+  is_visible  Boolean @default(true)
+
+  provider_response    String?   @db.Text
+  provider_response_at DateTime? @db.Timestamptz(3)
+
+  created_at DateTime @default(now()) @db.Timestamptz(3)
+  updated_at DateTime @updatedAt @db.Timestamptz(3)
+
+  booking  Booking  @relation(fields: [booking_id], references: [id], onDelete: Cascade)
+  provider Provider @relation(fields: [provider_id], references: [id], onDelete: Cascade)
+  staff    Staff    @relation(fields: [staff_id], references: [id], onDelete: Cascade)
+
+  @@index([provider_id, created_at])
+  @@index([staff_id, created_at])
+  @@index([overall_rating])
+  @@map("reviews")
+}
+
+model PlatformRevenue {
+  id String @id @default(uuid())
+
+  date DateTime @db.Date
+
+  total_bookings      Int @default(0)
+  successful_bookings Int @default(0)
+  cancelled_bookings  Int @default(0)
+
+  total_revenue   Int @default(0)
+  refunded_amount Int @default(0)
+  net_revenue     Int @default(0)
+
+  provider_breakdown Json? @db.JsonB
+
+  created_at DateTime @default(now()) @db.Timestamptz(3)
+  updated_at DateTime @updatedAt @db.Timestamptz(3)
+
+  @@unique([date])
+  @@index([date])
+  @@map("platform_revenue")
+}
+
+model AdminUser {
+  id String @id @default(uuid())
+
+  name          String @db.VarChar(100)
+  email         String @unique @db.VarChar(255)
+  password_hash String @db.VarChar(255)
+
+  role String @default("ADMIN") @db.VarChar(50)
+
+  permissions Json? @db.JsonB
+
+  is_active Boolean @default(true)
+
+  created_at    DateTime  @default(now()) @db.Timestamptz(3)
+  last_login_at DateTime? @db.Timestamptz(3)
+
+  @@index([email])
+  @@map("admin_users")
 }
