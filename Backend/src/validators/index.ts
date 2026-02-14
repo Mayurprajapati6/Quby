@@ -1,57 +1,52 @@
 import { NextFunction, Request, Response } from "express";
-import { AnyZodObject } from "zod";
+import { AnyZodObject, ZodError } from "zod";
 import logger from "../config/logger.config";
+import { BadRequestError } from "../utils/errors/app.error";
 
 /**
- * 
- * @param schema - Zod schema to validate the request body
- * @returns - Middleware function to validate the request body
+ * Validate request body
  */
 export const validateRequestBody = (schema: AnyZodObject) => {
-    return async (req: Request, res: Response, next: NextFunction) => {
-        try {
-
-            logger.info("Validating request body");
-            await schema.parseAsync(req.body);
-            logger.info("Request body is valid");
-            next();
-
-        } catch (error) {
-            // If the validation fails, 
-            logger.error("Request body is invalid");
-            res.status(400).json({
-                message: "Invalid request body",
-                success: false,
-                error: error
-            });
-            
-        }
+  return async (req: Request, res: Response, next: NextFunction) => {
+    try {
+      logger.info("Validating request body");
+      await schema.parseAsync(req.body);
+      logger.info("Request body is valid");
+      next();
+    } catch (error) {
+      logger.error("Request body is invalid");
+      
+      // Better error formatting
+      if (error instanceof ZodError) {
+        const formattedErrors = error.errors.map(err => ({
+          field: err.path.join('.'),
+          message: err.message,
+        }));
+        
+        return next(new BadRequestError('Validation failed'));
+        // You could also pass formattedErrors as details
+      }
+      
+      next(new BadRequestError('Invalid request body'));
     }
-}
+  };
+};
 
 /**
- * 
- * @param schema - Zod schema to validate the request body
- * @returns - Middleware function to validate the request query params
+ * Validate query params
  */
 export const validateQueryParams = (schema: AnyZodObject) => {
-    return async (req: Request, res: Response, next: NextFunction) => {
-        try {
-
-            await schema.parseAsync(req.query);
-            console.log("Query params are valid");
-            next();
-
-        } catch (error) {
-            // If the validation fails, 
-
-            res.status(400).json({
-                message: "Invalid query params",
-                success: false,
-                error: error
-            });
-            
-        }
+  return async (req: Request, res: Response, next: NextFunction) => {
+    try {
+      await schema.parseAsync(req.query);
+      console.log("Query params are valid");
+      next();
+    } catch (error) {
+      if (error instanceof ZodError) {
+        return next(new BadRequestError('Invalid query parameters'));
+      }
+      
+      next(new BadRequestError('Invalid query params'));
     }
-}
-
+  };
+};

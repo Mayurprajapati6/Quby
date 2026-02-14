@@ -6,7 +6,10 @@ import { appErrorHandler, genericErrorHandler } from './middlewares/error.middle
 import logger from './config/logger.config';
 import { attachCorrelationIdMiddleware } from './middlewares/correlation.middleware';
 import { prisma } from './config/prisma';
+import { apiLimiter } from './middlewares/rateLimiter.middleware';
 const app = express();
+
+app.use('/api', apiLimiter);
 
 app.use(express.json());
 
@@ -15,7 +18,8 @@ app.use(attachCorrelationIdMiddleware);
 app.use('/api/v1', v1Router);
 app.use('/api/v2', v2Router); 
 
-
+app.use(appErrorHandler);
+app.use(genericErrorHandler);
 
 prisma.$connect()
     .then(() => {
