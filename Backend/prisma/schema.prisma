@@ -13,16 +13,14 @@ datasource db {
   provider = "postgresql"
 }
 
-//ENUMS
-
 enum UserRole {
   CUSTOMER
   STAFF
-  PROVIDER
+  OWNER
   ADMIN
 }
 
-enum ProviderType {
+enum BusinessType {
   SALON
   SPA
 }
@@ -30,6 +28,16 @@ enum ProviderType {
 enum ServiceFor {
   MEN
   UNISEX
+}
+
+enum DayOfWeek {
+  MONDAY
+  TUESDAY
+  WEDNESDAY
+  THURSDAY
+  FRIDAY
+  SATURDAY
+  SUNDAY
 }
 
 enum BookingStatus {
@@ -84,7 +92,7 @@ enum BookingEventType {
   MONEY_RELEASED
 }
 
-enum NotificationType {
+enum CustomerNotificationType {
   BOOKING_CREATED
   BOOKING_CONFIRMED
   PAYMENT_SUCCESS
@@ -99,13 +107,15 @@ enum NotificationType {
   REVIEW_REQUEST
 }
 
-enum ProviderNotificationType {
+enum BusinessNotificationType {
   NEW_BOOKING
   BOOKING_CANCELLED
   STAFF_LEAVE_REQUEST
   NEW_REVIEW
   PAYMENT_RECEIVED
   LOW_RATING_ALERT
+  BUSINESS_VERIFIED
+  BUSINESS_REJECTED
 }
 
 enum StaffNotificationType {
@@ -123,41 +133,24 @@ enum StaffNotificationType {
 enum WalletTransactionType {
   BOOKING_PAYMENT
   REFUND
+  CREDIT
 }
 
-enum ProviderWalletTransactionType {
+enum BusinessWalletTransactionType {
   ESCROW_RELEASE
   PLATFORM_FEE
-}
-
-enum StaffWalletTransactionType {
-  EARNING
+  WITHDRAWAL
 }
 
 model User {
-  id            String @id @default(uuid())
-  name          String @db.VarChar(100)
-  email         String @unique @db.VarChar(255)
-  phone         String @unique @db.VarChar(20)
-  password_hash String @db.VarChar(255)
-
-  role UserRole @default(CUSTOMER)
+  id            String   @id @default(uuid())
+  email         String   @unique @db.VarChar(255)
+  password_hash String   @db.VarChar(255)
+  role          UserRole @default(CUSTOMER)
 
   is_active         Boolean   @default(true)
   is_verified       Boolean   @default(false)
-  email_verified_at DateTime?
-  phone_verified_at DateTime?
-
-  avatar_url    String?   @db.VarChar(500)
-  date_of_birth DateTime? @db.Date
-  gender        String?   @db.VarChar(20)
-
-  address_line1 String? @db.VarChar(255)
-  address_line2 String? @db.VarChar(255)
-  city          String? @db.VarChar(100)
-  state         String? @db.VarChar(100)
-  pincode       String? @db.VarChar(10)
-  country       String? @db.VarChar(100)
+  email_verified_at DateTime? @db.Timestamptz(3)
 
   version Int @default(1)
 
@@ -165,17 +158,15 @@ model User {
   updated_at    DateTime  @updatedAt @db.Timestamptz(3)
   last_login_at DateTime? @db.Timestamptz(3)
 
+  customer_profile Customer?
+  owner_profile    Owner?
+  staff_profile    Staff?
+
   refresh_tokens            RefreshToken[]
   password_reset_tokens     PasswordResetToken[]
   email_verification_tokens EmailVerificationToken[]
-  bookings                  Booking[]
-  notifications             Notification[]
-  wallet                    UserWallet?
-  transactions              Transaction[]            @relation("CustomerTransactions")
 
   @@index([email])
-  @@index([phone])
-  @@index([created_at])
   @@index([role, is_active])
   @@map("users")
 }
@@ -233,24 +224,84 @@ model EmailVerificationToken {
   @@map("email_verification_tokens")
 }
 
-model UserWallet {
+model Customer {
   id      String @id @default(uuid())
   user_id String @unique
 
-  balance  Int    @default(0)
-  currency String @default("INR") @db.VarChar(3)
+  name       String  @db.VarChar(100)
+  phone      String? @db.VarChar(20)
+  avatar_url String? @db.VarChar(500)
+  gender     String? @db.VarChar(20)
+
+  city    String @db.VarChar(100)
+  state   String @db.VarChar(100)
+  country String @default("India") @db.VarChar(100)
+
+  address_line1 String? @db.VarChar(255)
+  address_line2 String? @db.VarChar(255)
+
+  total_bookings     Int @default(0)
+  completed_bookings Int @default(0)
+  cancelled_bookings Int @default(0)
+  total_spent        Int @default(0)
+
+  current_streak    Int       @default(0)
+  longest_streak    Int       @default(0)
+  last_booking_date DateTime? @db.Timestamptz(3)
 
   created_at DateTime @default(now()) @db.Timestamptz(3)
   updated_at DateTime @updatedAt @db.Timestamptz(3)
 
-  user         User                @relation(fields: [user_id], references: [id], onDelete: Cascade)
-  transactions WalletTransaction[]
+  user          User                   @relation(fields: [user_id], references: [id], onDelete: Cascade)
+  bookings      Booking[]
+  reviews       Review[]
+  wallet        CustomerWallet?
+  notifications CustomerNotification[]
+  transactions  Transaction[]
+  favourites    CustomerFavourite[]
 
   @@index([user_id])
-  @@map("user_wallets")
+  @@index([city, state])
+  @@index([phone])
+  @@map("customers")
 }
 
-model WalletTransaction {
+model CustomerFavourite {
+  id          String @id @default(uuid())
+  customer_id String
+  business_id String
+
+  created_at DateTime @default(now()) @db.Timestamptz(3)
+
+  customer Customer @relation(fields: [customer_id], references: [id], onDelete: Cascade)
+  business Business @relation(fields: [business_id], references: [id], onDelete: Cascade)
+
+  @@unique([customer_id, business_id])
+  @@index([customer_id])
+  @@map("customer_favourites")
+}
+
+model CustomerWallet {
+  id          String @id @default(uuid())
+  customer_id String @unique
+
+  balance  Int    @default(0)
+  currency String @default("INR") @db.VarChar(3)
+
+  lifetime_spent   Int @default(0)
+  lifetime_refunds Int @default(0)
+
+  created_at DateTime @default(now()) @db.Timestamptz(3)
+  updated_at DateTime @updatedAt @db.Timestamptz(3)
+
+  customer     Customer                    @relation(fields: [customer_id], references: [id], onDelete: Cascade)
+  transactions CustomerWalletTransaction[]
+
+  @@index([customer_id])
+  @@map("customer_wallets")
+}
+
+model CustomerWalletTransaction {
   id        String @id @default(uuid())
   wallet_id String
 
@@ -266,48 +317,77 @@ model WalletTransaction {
 
   created_at DateTime @default(now()) @db.Timestamptz(3)
 
-  wallet UserWallet @relation(fields: [wallet_id], references: [id], onDelete: Cascade)
+  wallet CustomerWallet @relation(fields: [wallet_id], references: [id], onDelete: Cascade)
 
   @@index([wallet_id, created_at])
   @@index([booking_id])
-  @@map("wallet_transactions")
+  @@map("customer_wallet_transactions")
 }
 
-model PlatformService {
-  id String @id @default(uuid())
+model CustomerNotification {
+  id          String @id @default(uuid())
+  customer_id String
 
-  name        String       @db.VarChar(200)
-  description String?      @db.Text
-  category    ProviderType
-  service_for ServiceFor
+  type    CustomerNotificationType
+  title   String                   @db.VarChar(200)
+  message String                   @db.Text
 
-  default_duration Int
-  default_price    Int?
+  data       Json?   @db.JsonB
+  action_url String? @db.VarChar(500)
 
-  is_active  Boolean @default(true)
-  sort_order Int     @default(0)
+  is_read Boolean   @default(false)
+  read_at DateTime? @db.Timestamptz(3)
+
+  created_at DateTime @default(now()) @db.Timestamptz(3)
+
+  customer Customer @relation(fields: [customer_id], references: [id], onDelete: Cascade)
+
+  @@index([customer_id, created_at])
+  @@index([customer_id, is_read])
+  @@map("customer_notifications")
+}
+
+model Owner {
+  id      String @id @default(uuid())
+  user_id String @unique
+
+  name       String  @db.VarChar(100)
+  phone      String  @db.VarChar(20)
+  avatar_url String? @db.VarChar(500)
+
+  city  String @db.VarChar(100)
+  state String @db.VarChar(100)
+
+  total_businesses  Int @default(0)
+  active_businesses Int @default(0)
+  total_staff       Int @default(0)
+  total_bookings    Int @default(0)
+  lifetime_earnings Int @default(0)
+  current_balance   Int @default(0)
+
+  is_verified Boolean   @default(false)
+  verified_at DateTime? @db.Timestamptz(3)
 
   created_at DateTime @default(now()) @db.Timestamptz(3)
   updated_at DateTime @updatedAt @db.Timestamptz(3)
 
-  provider_offerings ProviderServiceOffering[]
+  user       User       @relation(fields: [user_id], references: [id], onDelete: Cascade)
+  businesses Business[]
 
-  @@index([category, service_for])
-  @@index([is_active])
-  @@map("platform_services")
+  @@index([user_id])
+  @@index([phone])
+  @@map("owners")
 }
 
-model Provider {
-  id String @id @default(uuid())
+model Business {
+  id       String @id @default(uuid())
+  owner_id String
 
   business_name String       @db.VarChar(200)
-  provider_type ProviderType
+  slug          String       @unique @db.VarChar(255)
+  business_type BusinessType
   service_for   ServiceFor
   description   String?      @db.Text
-
-  owner_name  String @db.VarChar(100)
-  owner_email String @unique @db.VarChar(255)
-  owner_phone String @unique @db.VarChar(20)
 
   address_line1 String  @db.VarChar(255)
   address_line2 String? @db.VarChar(255)
@@ -315,9 +395,8 @@ model Provider {
   state         String  @db.VarChar(100)
   pincode       String  @db.VarChar(10)
   country       String  @default("India") @db.VarChar(100)
-
-  latitude  Float?
-  longitude Float?
+  latitude      Float?
+  longitude     Float?
 
   business_email String? @db.VarChar(255)
   business_phone String? @db.VarChar(20)
@@ -326,16 +405,13 @@ model Provider {
   logo_url        String? @db.VarChar(500)
   cover_image_url String? @db.VarChar(500)
 
-  is_verified Boolean   @default(false)
-  verified_at DateTime? @db.Timestamptz(3)
-
-  gst_number String? @db.VarChar(50)
-  pan_number String? @db.VarChar(20)
+  is_verified       Boolean   @default(false)
+  verified_at       DateTime? @db.Timestamptz(3)
+  verification_note String?   @db.Text
 
   is_active Boolean @default(true)
 
-  working_hours Json @db.JsonB
-  closed_days   Json @default("[]") @db.JsonB
+  break_time_minutes Int @default(5)
 
   average_rating Float? @default(0)
   total_reviews  Int    @default(0)
@@ -343,83 +419,152 @@ model Provider {
   created_at DateTime @default(now()) @db.Timestamptz(3)
   updated_at DateTime @updatedAt @db.Timestamptz(3)
 
+  owner         Owner                     @relation(fields: [owner_id], references: [id], onDelete: Cascade)
   staff         Staff[]
-  services      ProviderServiceOffering[]
+  services      BusinessServiceOffering[]
   bookings      Booking[]
   reviews       Review[]
-  wallet        ProviderWallet?
+  wallet        BusinessWallet?
+  schedules     BusinessSchedule[]
   holidays      Holiday[]
-  notifications ProviderNotification[]
-  images        ProviderImage[]
-  history       ProviderHistory[]
+  images        BusinessImage[]
+  notifications BusinessNotification[]
+  favourites    CustomerFavourite[]
 
-  @@index([owner_email])
-  @@index([owner_phone])
+  @@index([owner_id])
+  @@index([slug])
   @@index([city, state])
-  @@index([provider_type, service_for])
+  @@index([business_type, service_for])
   @@index([is_verified, is_active])
   @@index([latitude, longitude])
-  @@map("providers")
+  @@map("businesses")
 }
 
-model ProviderImage {
+model BusinessSchedule {
   id          String @id @default(uuid())
-  provider_id String
+  business_id String
 
-  image_url String  @db.VarChar(500)
-  public_id String? @db.VarChar(255)
+  day_of_week DayOfWeek
+  is_open     Boolean   @default(true)
 
+  open_time  String?  @db.VarChar(5)
+  close_time String?  @db.VarChar(5)
+  created_at DateTime @default(now()) @db.Timestamptz(3)
+  updated_at DateTime @updatedAt @db.Timestamptz(3)
+
+  business Business @relation(fields: [business_id], references: [id], onDelete: Cascade)
+
+  @@unique([business_id, day_of_week])
+  @@index([business_id])
+  @@map("business_schedules")
+}
+
+model BusinessImage {
+  id          String @id @default(uuid())
+  business_id String
+
+  image_url     String  @db.VarChar(500)
+  public_id     String? @db.VarChar(255)
   thumbnail_url String? @db.VarChar(500)
   medium_url    String? @db.VarChar(500)
 
   is_primary Boolean @default(false)
   sort_order Int     @default(0)
-
-  caption String? @db.VarChar(255)
+  caption    String? @db.VarChar(255)
 
   created_at DateTime @default(now()) @db.Timestamptz(3)
 
-  provider Provider @relation(fields: [provider_id], references: [id], onDelete: Cascade)
+  business Business @relation(fields: [business_id], references: [id], onDelete: Cascade)
 
-  @@index([provider_id])
+  @@index([business_id])
   @@index([is_primary])
-  @@map("provider_images")
+  @@map("business_images")
 }
 
-model ProviderHistory {
+model BusinessNotification {
   id          String @id @default(uuid())
-  provider_id String
+  business_id String
 
-  snapshot_data Json    @db.JsonB
-  changed_by    String
-  change_type   String  @db.VarChar(50)
-  reason        String? @db.Text
+  type    BusinessNotificationType
+  title   String                   @db.VarChar(200)
+  message String                   @db.Text
+
+  data       Json?   @db.JsonB
+  action_url String? @db.VarChar(500)
+
+  is_read Boolean   @default(false)
+  read_at DateTime? @db.Timestamptz(3)
 
   created_at DateTime @default(now()) @db.Timestamptz(3)
 
-  provider Provider @relation(fields: [provider_id], references: [id], onDelete: Cascade)
+  business Business @relation(fields: [business_id], references: [id], onDelete: Cascade)
 
-  @@index([provider_id])
-  @@index([created_at])
-  @@map("provider_history")
+  @@index([business_id, created_at])
+  @@index([business_id, is_read])
+  @@map("business_notifications")
+}
+
+model BusinessWallet {
+  id          String @id @default(uuid())
+  business_id String @unique
+
+  balance           Int    @default(0)
+  currency          String @default("INR") @db.VarChar(3)
+  lifetime_earnings Int    @default(0)
+
+  version Int @default(1)
+
+  created_at DateTime @default(now()) @db.Timestamptz(3)
+  updated_at DateTime @updatedAt @db.Timestamptz(3)
+
+  business     Business                    @relation(fields: [business_id], references: [id], onDelete: Cascade)
+  transactions BusinessWalletTransaction[]
+
+  @@index([business_id])
+  @@map("business_wallets")
+}
+
+model BusinessWalletTransaction {
+  id        String @id @default(uuid())
+  wallet_id String
+
+  type          BusinessWalletTransactionType
+  amount        Int
+  balance_after Int
+
+  booking_id String?
+  escrow_id  String?
+
+  description String @db.VarChar(255)
+  metadata    Json?  @db.JsonB
+
+  created_at DateTime @default(now()) @db.Timestamptz(3)
+
+  wallet BusinessWallet @relation(fields: [wallet_id], references: [id], onDelete: Cascade)
+
+  @@index([wallet_id, created_at])
+  @@index([booking_id])
+  @@map("business_wallet_transactions")
 }
 
 model Holiday {
   id          String @id @default(uuid())
-  provider_id String
+  business_id String
 
-  holiday_date DateTime @db.Date
-  holiday_name String   @db.VarChar(100)
-  description  String?  @db.Text
+  holiday_name String  @db.VarChar(100)
+  description  String? @db.Text
+
+  start_date DateTime @db.Date
+  end_date   DateTime @db.Date
 
   applies_to_all_staff Boolean @default(true)
 
   created_at DateTime @default(now()) @db.Timestamptz(3)
 
-  provider       Provider       @relation(fields: [provider_id], references: [id], onDelete: Cascade)
+  business       Business       @relation(fields: [business_id], references: [id], onDelete: Cascade)
   staff_holidays StaffHoliday[]
 
-  @@index([provider_id, holiday_date])
+  @@index([business_id, start_date, end_date])
   @@map("holidays")
 }
 
@@ -437,84 +582,16 @@ model StaffHoliday {
   @@map("staff_holidays")
 }
 
-model ProviderNotification {
-  id          String @id @default(uuid())
-  provider_id String
-
-  type    ProviderNotificationType
-  title   String                   @db.VarChar(200)
-  message String                   @db.Text
-
-  data       Json?   @db.JsonB
-  action_url String? @db.VarChar(500)
-
-  is_read Boolean   @default(false)
-  read_at DateTime? @db.Timestamptz(3)
-
-  created_at DateTime @default(now()) @db.Timestamptz(3)
-
-  provider Provider @relation(fields: [provider_id], references: [id], onDelete: Cascade)
-
-  @@index([provider_id, created_at])
-  @@index([provider_id, is_read])
-  @@index([created_at])
-  @@map("provider_notifications")
-}
-
-model ProviderWallet {
-  id          String @id @default(uuid())
-  provider_id String @unique
-
-  balance  Int    @default(0)
-  currency String @default("INR") @db.VarChar(3)
-
-  lifetime_earnings Int @default(0)
-
-  version Int @default(1)
-
-  created_at DateTime @default(now()) @db.Timestamptz(3)
-  updated_at DateTime @updatedAt @db.Timestamptz(3)
-
-  provider     Provider                    @relation(fields: [provider_id], references: [id], onDelete: Cascade)
-  transactions ProviderWalletTransaction[]
-
-  @@index([provider_id])
-  @@map("provider_wallets")
-}
-
-model ProviderWalletTransaction {
-  id        String @id @default(uuid())
-  wallet_id String
-
-  type          ProviderWalletTransactionType
-  amount        Int
-  balance_after Int
-
-  booking_id String?
-  escrow_id  String?
-
-  description String @db.VarChar(255)
-  metadata    Json?  @db.JsonB
-
-  created_at DateTime @default(now()) @db.Timestamptz(3)
-
-  wallet ProviderWallet @relation(fields: [wallet_id], references: [id], onDelete: Cascade)
-
-  @@index([wallet_id, created_at])
-  @@index([booking_id])
-  @@map("provider_wallet_transactions")
-}
-
 model Staff {
   id          String @id @default(uuid())
-  provider_id String
+  user_id     String @unique
+  business_id String
 
-  name  String @db.VarChar(100)
-  phone String @unique @db.VarChar(20)
+  name       String  @db.VarChar(100)
+  phone      String  @db.VarChar(20)
+  email      String  @db.VarChar(255)
+  avatar_url String? @db.VarChar(500)
 
-  password_hash    String? @db.VarChar(255)
-  email            String? @db.VarChar(255)
-  avatar_url       String? @db.VarChar(500)
   bio              String? @db.Text
   specialization   String? @db.VarChar(200)
   experience_years Int?
@@ -528,7 +605,8 @@ model Staff {
   created_at DateTime @default(now()) @db.Timestamptz(3)
   updated_at DateTime @updatedAt @db.Timestamptz(3)
 
-  provider Provider @relation(fields: [provider_id], references: [id], onDelete: Cascade)
+  user     User     @relation(fields: [user_id], references: [id], onDelete: Cascade)
+  business Business @relation(fields: [business_id], references: [id], onDelete: Cascade)
 
   bookings       Booking[]
   schedules      StaffSchedule[]
@@ -536,14 +614,61 @@ model Staff {
   queues         DailyQueue[]
   services       StaffService[]
   reviews        Review[]
-  wallet         StaffWallet?
   staff_holidays StaffHoliday[]
   notifications  StaffNotification[]
 
-  @@index([provider_id])
-  @@index([provider_id, is_active])
+  @@index([user_id])
+  @@index([business_id])
+  @@index([business_id, is_active])
+  @@index([email])
   @@index([phone])
   @@map("staff")
+}
+
+model StaffSchedule {
+  id       String @id @default(uuid())
+  staff_id String
+
+  day_of_week  DayOfWeek
+  is_available Boolean   @default(true)
+
+  start_time String? @db.VarChar(5)
+  end_time   String? @db.VarChar(5)
+
+  created_at DateTime @default(now()) @db.Timestamptz(3)
+  updated_at DateTime @updatedAt @db.Timestamptz(3)
+
+  staff Staff @relation(fields: [staff_id], references: [id], onDelete: Cascade)
+
+  @@unique([staff_id, day_of_week])
+  @@index([staff_id])
+  @@map("staff_schedules")
+}
+
+model StaffLeave {
+  id       String @id @default(uuid())
+  staff_id String
+
+  start_date DateTime @db.Date
+  end_date   DateTime @db.Date
+
+  reason     String @db.Text
+  leave_type String @db.VarChar(50)
+
+  status LeaveStatus @default(PENDING)
+
+  approved_by      String?
+  approved_at      DateTime? @db.Timestamptz(3)
+  rejection_reason String?   @db.Text
+
+  created_at DateTime @default(now()) @db.Timestamptz(3)
+  updated_at DateTime @updatedAt @db.Timestamptz(3)
+
+  staff Staff @relation(fields: [staff_id], references: [id], onDelete: Cascade)
+
+  @@index([staff_id, start_date])
+  @@index([status])
+  @@map("staff_leaves")
 }
 
 model StaffNotification {
@@ -566,107 +691,42 @@ model StaffNotification {
 
   @@index([staff_id, created_at])
   @@index([staff_id, is_read])
-  @@index([created_at])
   @@map("staff_notifications")
 }
 
-model StaffWallet {
-  id       String @id @default(uuid())
-  staff_id String @unique
+model PlatformService {
+  id String @id @default(uuid())
 
-  balance  Int    @default(0)
-  currency String @default("INR") @db.VarChar(3)
+  name        String       @db.VarChar(200)
+  description String?      @db.Text
+  category    BusinessType
+  service_for ServiceFor
 
-  lifetime_earnings Int @default(0)
+  image_url String? @db.VarChar(500)
 
-  version Int @default(1)
+  default_duration Int
+  default_price    Int?
 
-  created_at DateTime @default(now()) @db.Timestamptz(3)
-  updated_at DateTime @updatedAt @db.Timestamptz(3)
-
-  staff        Staff                    @relation(fields: [staff_id], references: [id], onDelete: Cascade)
-  transactions StaffWalletTransaction[]
-
-  @@index([staff_id])
-  @@map("staff_wallets")
-}
-
-model StaffWalletTransaction {
-  id        String @id @default(uuid())
-  wallet_id String
-
-  type          StaffWalletTransactionType
-  amount        Int
-  balance_after Int
-
-  booking_id String?
-
-  description String @db.VarChar(255)
-  metadata    Json?  @db.JsonB
-
-  created_at DateTime @default(now()) @db.Timestamptz(3)
-
-  wallet StaffWallet @relation(fields: [wallet_id], references: [id], onDelete: Cascade)
-
-  @@index([wallet_id, created_at])
-  @@index([booking_id])
-  @@map("staff_wallet_transactions")
-}
-
-model StaffSchedule {
-  id       String @id @default(uuid())
-  staff_id String
-
-  date DateTime @db.Date
-
-  start_time String @db.VarChar(5)
-  end_time   String @db.VarChar(5)
-
-  is_available Boolean @default(true)
+  is_active  Boolean @default(true)
+  sort_order Int     @default(0)
 
   created_at DateTime @default(now()) @db.Timestamptz(3)
   updated_at DateTime @updatedAt @db.Timestamptz(3)
 
-  staff Staff @relation(fields: [staff_id], references: [id], onDelete: Cascade)
+  business_offerings BusinessServiceOffering[]
 
-  @@unique([staff_id, date])
-  @@index([staff_id, date])
-  @@map("staff_schedules")
+  @@index([category, service_for])
+  @@index([is_active])
+  @@map("platform_services")
 }
 
-model StaffLeave {
-  id       String @id @default(uuid())
-  staff_id String
-
-  leave_date DateTime @db.Date
-
-  reason     String @db.Text
-  leave_type String @db.VarChar(50)
-
-  status LeaveStatus @default(PENDING)
-
-  approved_by String?
-  approved_at DateTime? @db.Timestamptz(3)
-
-  created_at DateTime @default(now()) @db.Timestamptz(3)
-  updated_at DateTime @updatedAt @db.Timestamptz(3)
-
-  staff Staff @relation(fields: [staff_id], references: [id], onDelete: Cascade)
-
-  @@index([staff_id, leave_date])
-  @@index([status])
-  @@map("staff_leaves")
-}
-
-model ProviderServiceOffering {
+model BusinessServiceOffering {
   id                  String @id @default(uuid())
-  provider_id         String
+  business_id         String
   platform_service_id String
 
   price            Int
   discounted_price Int?
-
-  break_time_minutes Int @default(5)
 
   image_url String? @db.VarChar(500)
 
@@ -678,16 +738,15 @@ model ProviderServiceOffering {
   created_at DateTime @default(now()) @db.Timestamptz(3)
   updated_at DateTime @updatedAt @db.Timestamptz(3)
 
-  provider         Provider        @relation(fields: [provider_id], references: [id], onDelete: Cascade)
+  business         Business        @relation(fields: [business_id], references: [id], onDelete: Cascade)
   platform_service PlatformService @relation(fields: [platform_service_id], references: [id], onDelete: Restrict)
+  staff_services   StaffService[]
 
-  staff_services StaffService[]
-
-  @@unique([provider_id, platform_service_id])
-  @@index([provider_id])
+  @@unique([business_id, platform_service_id])
+  @@index([business_id])
   @@index([platform_service_id])
-  @@index([provider_id, is_active])
-  @@map("provider_service_offerings")
+  @@index([business_id, is_active])
+  @@map("business_service_offerings")
 }
 
 model StaffService {
@@ -696,15 +755,12 @@ model StaffService {
   service_offering_id String
 
   duration_minutes Int
-
-  custom_price Int?
-
-  is_available Boolean @default(true)
+  is_available     Boolean @default(true)
 
   created_at DateTime @default(now()) @db.Timestamptz(3)
 
   staff            Staff                   @relation(fields: [staff_id], references: [id], onDelete: Cascade)
-  service_offering ProviderServiceOffering @relation(fields: [service_offering_id], references: [id], onDelete: Cascade)
+  service_offering BusinessServiceOffering @relation(fields: [service_offering_id], references: [id], onDelete: Cascade)
 
   @@unique([staff_id, service_offering_id])
   @@index([staff_id])
@@ -718,8 +774,8 @@ model Booking {
   booking_number  String @unique @db.VarChar(20)
   idempotency_key String @unique @db.VarChar(100)
 
-  user_id     String
-  provider_id String
+  customer_id String
+  business_id String
   staff_id    String
 
   service_date DateTime @db.Date
@@ -757,8 +813,8 @@ model Booking {
   created_at DateTime @default(now()) @db.Timestamptz(3)
   updated_at DateTime @updatedAt @db.Timestamptz(3)
 
-  user     User     @relation(fields: [user_id], references: [id], onDelete: Restrict)
-  provider Provider @relation(fields: [provider_id], references: [id], onDelete: Restrict)
+  customer Customer @relation(fields: [customer_id], references: [id], onDelete: Restrict)
+  business Business @relation(fields: [business_id], references: [id], onDelete: Restrict)
   staff    Staff    @relation(fields: [staff_id], references: [id], onDelete: Restrict)
 
   events        BookingEvent[]
@@ -768,9 +824,9 @@ model Booking {
   review        Review?
 
   @@unique([staff_id, service_date, queue_number], name: "unique_queue_position")
-  @@index([user_id, created_at])
+  @@index([customer_id, created_at])
   @@index([staff_id, service_date])
-  @@index([provider_id, service_date])
+  @@index([business_id, service_date])
   @@index([status])
   @@index([booking_number])
   @@index([idempotency_key])
@@ -782,9 +838,8 @@ model DailyQueue {
   staff_id     String
   service_date DateTime @db.Date
 
-  queue_data Json @default("[]") @db.JsonB
-
-  last_queue_number Int @default(0)
+  queue_data        Json @default("[]") @db.JsonB
+  last_queue_number Int  @default(0)
 
   version Int @default(1)
 
@@ -802,10 +857,9 @@ model BookingEvent {
   id         String @id @default(uuid())
   booking_id String
 
-  event_type BookingEventType
-  event_data Json             @db.JsonB
-
-  user_id String?
+  event_type   BookingEventType
+  event_data   Json             @db.JsonB
+  triggered_by String?
 
   created_at DateTime @default(now()) @db.Timestamptz(3)
 
@@ -820,8 +874,7 @@ model QRCode {
   id         String @id @default(uuid())
   booking_id String @unique
 
-  qr_code_id String @unique @db.VarChar(50)
-
+  qr_code_id   String @unique @db.VarChar(50)
   qr_data      String @db.Text
   qr_image_url String @db.Text
 
@@ -856,31 +909,28 @@ model ServiceTimer {
 model Transaction {
   id String @id @default(uuid())
 
-  booking_id String @unique
-
-  user_id     String
-  provider_id String
+  booking_id  String @unique
+  customer_id String
+  business_id String
   staff_id    String
 
   razorpay_order_id   String  @unique @db.VarChar(100)
   razorpay_payment_id String? @unique @db.VarChar(100)
   razorpay_signature  String? @db.VarChar(500)
 
-  amount   Int
-  currency String @default("INR") @db.VarChar(3)
-
+  amount         Int
+  currency       String  @default("INR") @db.VarChar(3)
   payment_method String? @db.VarChar(50)
 
   status TransactionStatus @default(PENDING)
 
-  created_at DateTime  @default(now()) @db.Timestamptz(3)
-  paid_at    DateTime? @db.Timestamptz(3)
-  failed_at  DateTime? @db.Timestamptz(3)
+  created_at     DateTime  @default(now()) @db.Timestamptz(3)
+  paid_at        DateTime? @db.Timestamptz(3)
+  failed_at      DateTime? @db.Timestamptz(3)
+  failure_reason String?   @db.Text
 
-  failure_reason String? @db.Text
-
-  booking Booking @relation(fields: [booking_id], references: [id], onDelete: Cascade)
-  user    User    @relation("CustomerTransactions", fields: [user_id], references: [id], onDelete: Restrict)
+  booking  Booking  @relation(fields: [booking_id], references: [id], onDelete: Cascade)
+  customer Customer @relation(fields: [customer_id], references: [id], onDelete: Restrict)
 
   platform_fee PlatformFeeTransaction?
   escrow       EscrowTransaction?
@@ -888,7 +938,7 @@ model Transaction {
 
   @@index([status])
   @@index([razorpay_order_id])
-  @@index([user_id, created_at])
+  @@index([customer_id, created_at])
   @@index([booking_id])
   @@map("transactions")
 }
@@ -897,19 +947,17 @@ model PlatformFeeTransaction {
   id             String @id @default(uuid())
   transaction_id String @unique
   booking_id     String
-  provider_id    String
+  business_id    String
 
-  amount Int
-  status String @default("COLLECTED") @db.VarChar(20)
-
-  collected_at DateTime @db.Timestamptz(3)
-
-  is_refundable Boolean @default(false)
+  amount        Int
+  status        String   @default("COLLECTED") @db.VarChar(20)
+  collected_at  DateTime @db.Timestamptz(3)
+  is_refundable Boolean  @default(false)
 
   transaction Transaction @relation(fields: [transaction_id], references: [id], onDelete: Cascade)
 
   @@index([collected_at])
-  @@index([provider_id])
+  @@index([business_id])
   @@map("platform_fee_transactions")
 }
 
@@ -917,15 +965,13 @@ model EscrowTransaction {
   id             String @id @default(uuid())
   transaction_id String @unique
   booking_id     String @unique
-  provider_id    String
+  business_id    String
   staff_id       String
 
   amount Int
-
   status EscrowStatus @default(HELD)
 
-  held_at DateTime @db.Timestamptz(3)
-
+  held_at              DateTime  @db.Timestamptz(3)
   scheduled_release_at DateTime  @db.Timestamptz(3)
   released_at          DateTime? @db.Timestamptz(3)
   refunded_at          DateTime? @db.Timestamptz(3)
@@ -945,7 +991,6 @@ model Refund {
   razorpay_refund_id String @unique @db.VarChar(100)
 
   amount Int
-
   status RefundStatus @default(PROCESSING)
 
   created_at   DateTime  @default(now()) @db.Timestamptz(3)
@@ -957,69 +1002,83 @@ model Refund {
   @@map("refunds")
 }
 
-model Notification {
-  id      String @id @default(uuid())
-  user_id String
-
-  type    NotificationType
-  title   String           @db.VarChar(200)
-  message String           @db.Text
-
-  data       Json?   @db.JsonB
-  action_url String? @db.VarChar(500)
-
-  is_read Boolean   @default(false)
-  read_at DateTime? @db.Timestamptz(3)
-
-  created_at DateTime @default(now()) @db.Timestamptz(3)
-
-  user User @relation(fields: [user_id], references: [id], onDelete: Cascade)
-
-  @@index([user_id, created_at])
-  @@index([user_id, is_read])
-  @@index([created_at])
-  @@map("notifications")
-}
-
 model Review {
   id          String @id @default(uuid())
   booking_id  String @unique
-  user_id     String
-  provider_id String
+  customer_id String
+  business_id String
   staff_id    String
 
   staff_rating    Int
-  provider_rating Int
+  business_rating Int
   overall_rating  Int
 
   staff_comment    String? @db.Text
-  provider_comment String? @db.Text
+  business_comment String? @db.Text
 
   images Json? @db.JsonB
 
   is_verified Boolean @default(false)
   is_visible  Boolean @default(true)
+  is_edited   Boolean @default(false)
 
-  provider_response    String?   @db.Text
-  provider_response_at DateTime? @db.Timestamptz(3)
+  business_response    String?   @db.Text
+  business_response_at DateTime? @db.Timestamptz(3)
 
   created_at DateTime @default(now()) @db.Timestamptz(3)
   updated_at DateTime @updatedAt @db.Timestamptz(3)
 
   booking  Booking  @relation(fields: [booking_id], references: [id], onDelete: Cascade)
-  provider Provider @relation(fields: [provider_id], references: [id], onDelete: Cascade)
+  customer Customer @relation(fields: [customer_id], references: [id], onDelete: Cascade)
+  business Business @relation(fields: [business_id], references: [id], onDelete: Cascade)
   staff    Staff    @relation(fields: [staff_id], references: [id], onDelete: Cascade)
 
-  @@index([provider_id, created_at])
+  @@index([business_id, created_at])
   @@index([staff_id, created_at])
   @@index([overall_rating])
   @@map("reviews")
 }
 
+model PlatformConfig {
+  id String @id @default(uuid())
+
+  key   String @unique @db.VarChar(100)
+  value String @db.VarChar(255)
+
+  description String? @db.Text
+
+  updated_by String?
+
+  created_at DateTime @default(now()) @db.Timestamptz(3)
+  updated_at DateTime @updatedAt @db.Timestamptz(3)
+
+  @@index([key])
+  @@map("platform_configs")
+}
+
+model Admin {
+  id String @id @default(uuid())
+
+  name          String @db.VarChar(100)
+  email         String @unique @db.VarChar(255)
+  password_hash String @db.VarChar(255)
+
+  permissions Json? @db.JsonB
+
+  is_active Boolean @default(true)
+
+  created_at    DateTime  @default(now()) @db.Timestamptz(3)
+  updated_at    DateTime  @updatedAt @db.Timestamptz(3)
+  last_login_at DateTime? @db.Timestamptz(3)
+
+  @@index([email])
+  @@map("admins")
+}
+
 model PlatformRevenue {
   id String @id @default(uuid())
 
-  date DateTime @db.Date
+  date DateTime @unique @db.Date
 
   total_bookings      Int @default(0)
   successful_bookings Int @default(0)
@@ -1029,32 +1088,11 @@ model PlatformRevenue {
   refunded_amount Int @default(0)
   net_revenue     Int @default(0)
 
-  provider_breakdown Json? @db.JsonB
+  business_breakdown Json? @db.JsonB
 
   created_at DateTime @default(now()) @db.Timestamptz(3)
   updated_at DateTime @updatedAt @db.Timestamptz(3)
 
-  @@unique([date])
   @@index([date])
   @@map("platform_revenue")
-}
-
-model AdminUser {
-  id String @id @default(uuid())
-
-  name          String @db.VarChar(100)
-  email         String @unique @db.VarChar(255)
-  password_hash String @db.VarChar(255)
-
-  role String @default("ADMIN") @db.VarChar(50)
-
-  permissions Json? @db.JsonB
-
-  is_active Boolean @default(true)
-
-  created_at    DateTime  @default(now()) @db.Timestamptz(3)
-  last_login_at DateTime? @db.Timestamptz(3)
-
-  @@index([email])
-  @@map("admin_users")
 }
