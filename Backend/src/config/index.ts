@@ -10,6 +10,7 @@ type ServerConfig = {
     CLOUDINARY_CLOUD_NAME: string,
     CLOUDINARY_API_KEY: string,
     CLOUDINARY_API_SECRET: string,
+    CORS_ORIGIN: string,
 }
 
 function loadEnv() {
@@ -28,4 +29,5 @@ export const serverConfig: ServerConfig = {
     CLOUDINARY_CLOUD_NAME: process.env.CLOUDINARY_CLOUD_NAME || "",
     CLOUDINARY_API_KEY: process.env.CLOUDINARY_API_KEY || "",
     CLOUDINARY_API_SECRET: process.env.CLOUDINARY_API_SECRET || "",
+    CORS_ORIGIN: process.env.CORS_ORIGIN || "",
 };

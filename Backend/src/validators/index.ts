@@ -1,12 +1,12 @@
 import { NextFunction, Request, Response } from "express";
-import { AnyZodObject, ZodError } from "zod";
+import { ZodTypeAny, ZodError } from "zod";
 import logger from "../config/logger.config";
 import { BadRequestError } from "../utils/errors/app.error";
 
 /**
  * Validate request body
  */
-export const validateRequestBody = (schema: AnyZodObject) => {
+export const validateRequestBody = (schema: ZodTypeAny) => {
   return async (req: Request, res: Response, next: NextFunction) => {
     try {
       logger.info("Validating request body");
@@ -35,7 +35,7 @@ export const validateRequestBody = (schema: AnyZodObject) => {
 /**
  * Validate query params
  */
-export const validateQueryParams = (schema: AnyZodObject) => {
+export const validateQueryParams = (schema: ZodTypeAny) => {
   return async (req: Request, res: Response, next: NextFunction) => {
     try {
       await schema.parseAsync(req.query);
