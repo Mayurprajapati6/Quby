@@ -1,9 +1,8 @@
 export interface JwtPayload {
   userId: string;
-  role: 'CUSTOMER' | 'STAFF' | 'OWNER' | 'ADMIN';
-  version: number; // Increments on password change — invalidates old tokens
+  role: "CUSTOMER" | "STAFF" | "OWNER" | "ADMIN";
+  version: number;
 }
-
 export interface UserSignupDTO {
   name: string;
   email: string;
@@ -11,19 +10,16 @@ export interface UserSignupDTO {
   city: string;
   state: string;
   phone?: string;
-  role: 'CUSTOMER' | 'OWNER';
+  role: "CUSTOMER" | "OWNER";
 }
-
 export interface LoginDTO {
   email: string;
   password: string;
 }
-
 export interface StaffSetupDTO {
-  token: string;     
+  token: string;
   newPassword: string;
 }
-
 export interface ForgotPasswordDTO {
   email: string;
 }
@@ -37,16 +33,14 @@ export interface ChangePasswordDTO {
   currentPassword: string;
   newPassword: string;
 }
-
 export interface DeleteAccountDTO {
   password: string;
 }
-
 export interface MinimalUserInfo {
   id: string;
   email: string;
   name: string;
-  role: 'CUSTOMER' | 'STAFF' | 'OWNER' | 'ADMIN';
+  role: "CUSTOMER" | "STAFF" | "OWNER" | "ADMIN";
 }
 
 export interface TokenResult {
@@ -54,7 +48,6 @@ export interface TokenResult {
   refreshToken: string;
   user: MinimalUserInfo;
 }
-
 export interface CreateCustomerProfileDTO {
   userId: string;
   name: string;

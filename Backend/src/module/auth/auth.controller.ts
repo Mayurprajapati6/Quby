@@ -9,19 +9,25 @@ const COOKIE_OPTIONS = {
   httpOnly: true,
   secure: process.env.NODE_ENV === "production",
   sameSite: "strict" as const,
-  maxAge: 7 * 24 * 60 * 60 * 1000,
+  maxAge: 7 * 24 * 60 * 60 * 1000, // 7 days
 };
 
 function extractMeta(req: Request) {
   return {
-    ipAddress: (req.headers["x-forwarded-for"] as string)?.split(",")[0]?.trim() ?? req.ip,
+    ipAddress:
+      (req.headers["x-forwarded-for"] as string)?.split(",")[0]?.trim() ??
+      req.ip,
     userAgent: req.headers["user-agent"],
   };
 }
 
 export class AuthController {
 
-  static signup = async (req: Request, res: Response, next: NextFunction): Promise<void> => {
+  static signup = async (
+    req: Request,
+    res: Response,
+    next: NextFunction
+  ): Promise<void> => {
     try {
       const result = await AuthService.signup(req.body);
 
@@ -38,7 +44,11 @@ export class AuthController {
     }
   };
 
-  static login = async (req: Request, res: Response, next: NextFunction): Promise<void> => {
+  static login = async (
+    req: Request,
+    res: Response,
+    next: NextFunction
+  ): Promise<void> => {
     try {
       const result = await AuthService.login(req.body, extractMeta(req));
 
@@ -55,7 +65,11 @@ export class AuthController {
     }
   };
 
-  static staffSetup = async (req: Request, res: Response, next: NextFunction): Promise<void> => {
+  static staffSetup = async (
+    req: Request,
+    res: Response,
+    next: NextFunction
+  ): Promise<void> => {
     try {
       const result = await AuthService.staffSetup(req.body, extractMeta(req));
 
@@ -72,7 +86,11 @@ export class AuthController {
     }
   };
 
-  static forgotPassword = async (req: Request, res: Response, next: NextFunction): Promise<void> => {
+  static forgotPassword = async (
+    req: Request,
+    res: Response,
+    next: NextFunction
+  ): Promise<void> => {
     try {
       await AuthService.forgotPassword(req.body);
 
@@ -87,33 +105,51 @@ export class AuthController {
     }
   };
 
-  static resetPassword = async (req: Request, res: Response, next: NextFunction): Promise<void> => {
+  static resetPassword = async (
+    req: Request,
+    res: Response,
+    next: NextFunction
+  ): Promise<void> => {
     try {
       await AuthService.resetPassword(req.body);
 
       res.status(StatusCodes.OK).json(
-        successResponse(null, "Password reset successfully. Please login with your new password.")
+        successResponse(
+          null,
+          "Password reset successfully. Please login with your new password."
+        )
       );
     } catch (err) {
       next(err);
     }
   };
 
-  static changePassword = async (req: AuthRequest, res: Response, next: NextFunction): Promise<void> => {
+  static changePassword = async (
+    req: AuthRequest,
+    res: Response,
+    next: NextFunction
+  ): Promise<void> => {
     try {
       await AuthService.changePassword(req.user!.userId, req.body);
 
       res.clearCookie("refreshToken");
 
       res.status(StatusCodes.OK).json(
-        successResponse(null, "Password changed successfully. Please login again.")
+        successResponse(
+          null,
+          "Password changed successfully. Please login again on all devices."
+        )
       );
     } catch (err) {
       next(err);
     }
   };
 
-  static refresh = async (req: Request, res: Response, next: NextFunction): Promise<void> => {
+  static refresh = async (
+    req: Request,
+    res: Response,
+    next: NextFunction
+  ): Promise<void> => {
     try {
       const refreshToken = req.cookies?.refreshToken;
 
@@ -125,7 +161,10 @@ export class AuthController {
         return;
       }
 
-      const result = await AuthService.refreshAccessToken(refreshToken, extractMeta(req));
+      const result = await AuthService.refreshAccessToken(
+        refreshToken,
+        extractMeta(req)
+      );
 
       res.cookie("refreshToken", result.refreshToken, COOKIE_OPTIONS);
 
@@ -137,7 +176,11 @@ export class AuthController {
     }
   };
 
-  static logout = async (req: Request, res: Response, next: NextFunction): Promise<void> => {
+  static logout = async (
+    req: Request,
+    res: Response,
+    next: NextFunction
+  ): Promise<void> => {
     try {
       const refreshToken = req.cookies?.refreshToken;
 
@@ -155,7 +198,11 @@ export class AuthController {
     }
   };
 
-  static logoutAll = async (req: AuthRequest, res: Response, next: NextFunction): Promise<void> => {
+  static logoutAll = async (
+    req: AuthRequest,
+    res: Response,
+    next: NextFunction
+  ): Promise<void> => {
     try {
       await AuthService.logoutAllDevices(req.user!.userId);
 
@@ -169,7 +216,11 @@ export class AuthController {
     }
   };
 
-  static deleteAccount = async (req: AuthRequest, res: Response, next: NextFunction): Promise<void> => {
+  static deleteAccount = async (
+    req: AuthRequest,
+    res: Response,
+    next: NextFunction
+  ): Promise<void> => {
     try {
       await AuthService.deleteAccount(req.user!.userId, req.body.password);
 

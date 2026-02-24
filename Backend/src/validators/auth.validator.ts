@@ -1,6 +1,5 @@
 import { z } from "zod";
 
-
 const email = z.string().email("Invalid email format.");
 
 const phone = z.string().regex(/^\d{10}$/, "Phone must be exactly 10 digits.");
@@ -19,14 +18,7 @@ const name = z
   .max(100, "Name cannot exceed 100 characters.");
 
 const city = z.string().min(2, "City must be at least 2 characters.");
-
 const state = z.string().min(2, "State must be at least 2 characters.");
-
-const role = z.enum(["CUSTOMER", "OWNER"], {
-  errorMap: () => ({
-    message: "Role must be CUSTOMER or OWNER. Staff accounts are created by employers.",
-  }),
-});
 
 export const signupSchema = z
   .object({
@@ -36,7 +28,12 @@ export const signupSchema = z
     city,
     state,
     phone: phone.optional(),
-    role,
+    role: z.enum(["CUSTOMER", "OWNER"], {
+      errorMap: () => ({
+        message:
+          "Role must be CUSTOMER or OWNER. Staff accounts are created by your employer.",
+      }),
+    }),
   })
   .refine((data) => !(data.role === "OWNER" && !data.phone), {
     message: "Phone number is required for owner accounts.",
@@ -66,5 +63,7 @@ export const changePasswordSchema = z.object({
 });
 
 export const deleteAccountSchema = z.object({
-  password: z.string().min(1, "Password confirmation is required to delete your account."),
+  password: z
+    .string()
+    .min(1, "Password confirmation is required to delete your account."),
 });

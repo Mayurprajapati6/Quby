@@ -12,7 +12,7 @@ export class AuthRepository {
   static async createUser(
     email: string,
     passwordHash: string,
-    role: 'CUSTOMER' | 'OWNER' | 'STAFF'
+    role: "CUSTOMER" | "OWNER"
   ) {
     return prisma.user.create({
       data: { email, password_hash: passwordHash, role },
@@ -48,13 +48,6 @@ export class AuthRepository {
     });
   }
 
-  static async deactivateUser(userId: string) {
-    return prisma.user.update({
-      where: { id: userId },
-      data: { is_active: false },
-    });
-  }
-
   static async deleteUser(userId: string) {
     return prisma.user.delete({ where: { id: userId } });
   }
@@ -73,7 +66,7 @@ export class AuthRepository {
 
   static async createCustomerWallet(customerId: string) {
     return prisma.customerWallet.create({
-      data: { customer_id: customerId, balance: 0, currency: 'INR' },
+      data: { customer_id: customerId, balance: 0, currency: "INR" },
     });
   }
 
@@ -97,15 +90,15 @@ export class AuthRepository {
     return prisma.owner.findUnique({ where: { user_id: userId } });
   }
 
+  static async findStaffByUserId(userId: string) {
+    return prisma.staff.findUnique({ where: { user_id: userId } });
+  }
+
   static async findStaffByEmail(email: string) {
     return prisma.staff.findFirst({
       where: { email },
       include: { user: true },
     });
-  }
-
-  static async findStaffByUserId(userId: string) {
-    return prisma.staff.findUnique({ where: { user_id: userId } });
   }
 
   static async activateStaffAccount(userId: string, passwordHash: string) {
@@ -114,13 +107,12 @@ export class AuthRepository {
       data: {
         password_hash: passwordHash,
         is_verified: true,
-        is_active: true,
       },
     });
   }
 
-  static async findAdminByEmail(email: string) {
-    return prisma.admin.findUnique({ where: { email } });
+  static async findAdminByUserId(userId: string) {
+    return prisma.admin.findUnique({ where: { user_id: userId } });
   }
 
   static async saveRefreshToken(data: SaveRefreshTokenDTO) {
@@ -197,6 +189,7 @@ export class AuthRepository {
   }
 
   static async createStaffSetupToken(data: CreateStaffSetupTokenDTO) {
+
     await prisma.emailVerificationToken.updateMany({
       where: { user_id: data.userId, is_used: false },
       data: { is_used: true, used_at: new Date() },

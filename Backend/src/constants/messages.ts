@@ -1,19 +1,19 @@
 export const AUTH_MESSAGES = {
-  INVALID_CREDENTIALS:    "Invalid email or password.",
-  ACCOUNT_DEACTIVATED:    "Your account has been deactivated. Please contact support.",
-  UNAUTHORIZED:           "Authentication required. Please login.",
-  TOKEN_EXPIRED:          "Your session has expired. Please login again.",
-  EMAIL_EXISTS:           "An account with this email already exists.",
-  REGISTRATION_SUCCESS:   "Account created successfully.",
-  LOGIN_SUCCESS:          "Logged in successfully.",
-  LOGOUT_SUCCESS:         "Logged out successfully.",
+  INVALID_CREDENTIALS: "Invalid email or password.",
+  ACCOUNT_DEACTIVATED: "Your account has been deactivated. Please contact support.",
+  UNAUTHORIZED:        "Authentication required. Please login.",
+  TOKEN_EXPIRED:       "Your session has expired. Please login again.",
+  EMAIL_EXISTS:        "An account with this email already exists.",
+  REGISTRATION_SUCCESS:"Account created successfully.",
+  LOGIN_SUCCESS:       "Logged in successfully.",
+  LOGOUT_SUCCESS:      "Logged out successfully.",
 } as const;
 
 export const VALIDATION_MESSAGES = {
-  REQUIRED_FIELD:  "This field is required.",
-  INVALID_EMAIL:   "Invalid email format.",
-  INVALID_PHONE:   "Phone must be exactly 10 digits.",
-  WEAK_PASSWORD:   "Password must be at least 8 characters with uppercase, lowercase, and a number.",
+  REQUIRED_FIELD: "This field is required.",
+  INVALID_EMAIL:  "Invalid email format.",
+  INVALID_PHONE:  "Phone must be exactly 10 digits.",
+  WEAK_PASSWORD:  "Password must be at least 8 characters with uppercase, lowercase, and a number.",
 } as const;
 
 export const BOOKING_MESSAGES = {
