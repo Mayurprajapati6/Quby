@@ -8,7 +8,7 @@ import {
 } from "./auth.types";
 
 export class AuthRepository {
-
+  
   static async createUser(
     email: string,
     passwordHash: string,
@@ -90,15 +90,15 @@ export class AuthRepository {
     return prisma.owner.findUnique({ where: { user_id: userId } });
   }
 
-  static async findStaffByUserId(userId: string) {
-    return prisma.staff.findUnique({ where: { user_id: userId } });
-  }
-
   static async findStaffByEmail(email: string) {
     return prisma.staff.findFirst({
       where: { email },
       include: { user: true },
     });
+  }
+
+  static async findStaffByUserId(userId: string) {
+    return prisma.staff.findUnique({ where: { user_id: userId } });
   }
 
   static async activateStaffAccount(userId: string, passwordHash: string) {
@@ -156,6 +156,7 @@ export class AuthRepository {
   }
 
   static async createPasswordResetToken(data: CreatePasswordResetTokenDTO) {
+
     await prisma.passwordResetToken.updateMany({
       where: { user_id: data.userId, is_used: false },
       data: { is_used: true, used_at: new Date() },
