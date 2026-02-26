@@ -11,6 +11,13 @@ type ServerConfig = {
     CLOUDINARY_API_KEY: string,
     CLOUDINARY_API_SECRET: string,
     CORS_ORIGIN: string,
+    REDIS_PORT?: number,
+    REDIS_HOST?: string,
+    MAIL_PASS?: string,
+    MAIL_USER?: string,
+    RAZORPAY_KEY_ID: string,
+    RAZORPAY_KEY_SECRET: string,
+    RAZORPAY_WEBHOOK_SECRET: string
 }
 
 function loadEnv() {
@@ -30,4 +37,11 @@ export const serverConfig: ServerConfig = {
     CLOUDINARY_API_KEY: process.env.CLOUDINARY_API_KEY || "",
     CLOUDINARY_API_SECRET: process.env.CLOUDINARY_API_SECRET || "",
     CORS_ORIGIN: process.env.CORS_ORIGIN || "",
+    REDIS_PORT: process.env.REDIS_PORT ? Number(process.env.REDIS_PORT) : 6379,
+    REDIS_HOST: process.env.REDIS_HOST || 'localhost',
+    MAIL_PASS: process.env.MAIL_PASS || '',
+    MAIL_USER: process.env.MAIL_USER || '',
+    RAZORPAY_KEY_ID: process.env.RAZORPAY_KEY_ID || "",
+    RAZORPAY_KEY_SECRET: process.env.RAZORPAY_KEY_SECRET || "",
+    RAZORPAY_WEBHOOK_SECRET: process.env.RAZORPAY_WEBHOOK_SECRET || "",
 };
