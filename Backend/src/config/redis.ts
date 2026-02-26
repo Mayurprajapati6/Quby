@@ -3,17 +3,17 @@ import { serverConfig } from './index';
 import logger from './logger.config';
 
 const redisOptions = {
-    host:               serverConfig.REDIS_HOST ?? 'localhost',
-    port:               serverConfig.REDIS_PORT ?? 6379,
-    maxRetriesPerRequest: 3,
-    enableReadyCheck:   true,
-    lazyConnect:        false,
-    keepAlive:          30_000,
-    connectTimeout:     10_000,
+    host:                 serverConfig.REDIS_HOST ?? 'localhost',
+    port:                 serverConfig.REDIS_PORT ?? 6379,
+    maxRetriesPerRequest: null,       
+    enableReadyCheck:     true,
+    lazyConnect:          false,
+    keepAlive:            30_000,
+    connectTimeout:       10_000,
     retryStrategy(times: number) {
         if (times > 10) {
             logger.error('[Redis] Max retry attempts reached. Giving up.');
-            return null; 
+            return null;
         }
         const delay = Math.min(times * 200, 3_000);
         logger.warn(`[Redis] Reconnecting in ${delay}ms (attempt ${times})...`);
@@ -26,10 +26,10 @@ export const redisClient = new Redis(redisOptions);
 export const redisPub = new Redis(redisOptions);
 export const redisSub = new Redis(redisOptions);
 
-redisClient.on('connect', () => logger.info('[Redis] Client connected'));
-redisClient.on('ready',   () => logger.info('[Redis] Client ready'));
-redisClient.on('error',   (err) => logger.error('[Redis] Client error:', err.message));
-redisClient.on('close',   () => logger.warn('[Redis] Client connection closed'));
+redisClient.on('connect',      () => logger.info('[Redis] Client connected'));
+redisClient.on('ready',        () => logger.info('[Redis] Client ready'));
+redisClient.on('error',        (err) => logger.error('[Redis] Client error:', err.message));
+redisClient.on('close',        () => logger.warn('[Redis] Client connection closed'));
 redisClient.on('reconnecting', () => logger.warn('[Redis] Client reconnecting...'));
 
 redisPub.on('error', (err) => logger.error('[Redis Pub] Error:', err.message));
