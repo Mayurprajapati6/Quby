@@ -1,11 +1,10 @@
-// ─── Response shape returned to client ───────────────────────────────────────
 export interface StaffProfile {
   id:               string;
   userId:           string;
   email:            string;
   name:             string;
   phone:            string;
-  avatar_url:       string;
+  avatar_url:       string | null;
   bio:              string | null;
   specialization:   string | null;
   experience_years: number | null;
@@ -22,8 +21,8 @@ export interface StaffProfile {
     city:          string;
     state:         string;
   };
-  services: StaffServiceItem[];
-  schedule: StaffScheduleItem[];
+  services:  StaffServiceItem[];
+  schedule:  StaffScheduleItem[];
   createdAt: Date;
   updatedAt: Date;
 }
@@ -42,16 +41,10 @@ export interface StaffScheduleItem {
   start_time:   string | null;
   end_time:     string | null;
 }
-
-// ─── DTO: what staff can send in PATCH body ───────────────────────────────────
-// Only these 3 fields. Phone, name, email, specialization blocked at Zod layer.
 export interface UpdateStaffProfileDTO {
-  avatar?:           string; // base64 image
   bio?:              string;
   experience_years?: number;
 }
-
-// ─── DTO: what repository writes to DB ───────────────────────────────────────
 export interface UpdateStaffProfileRepoDTO {
   avatar_url?:       string;
   bio?:              string;

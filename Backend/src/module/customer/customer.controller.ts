@@ -5,6 +5,7 @@ import { successResponse } from "../../utils/helpers/response";
 import { AuthRequest } from "../../middlewares/types";
 
 export class CustomerController {
+
   static getProfile = async (req: AuthRequest, res: Response, next: NextFunction): Promise<void> => {
     try {
       const profile = await CustomerService.getProfile(req.user!.userId);
@@ -16,7 +17,11 @@ export class CustomerController {
 
   static updateProfile = async (req: AuthRequest, res: Response, next: NextFunction): Promise<void> => {
     try {
-      const updated = await CustomerService.updateProfile(req.user!.userId, req.body);
+      const updated = await CustomerService.updateProfile(
+        req.user!.userId,
+        req.body,
+        req.file   
+      );
       res.status(StatusCodes.OK).json(successResponse(updated, "Profile updated successfully."));
     } catch (err) {
       next(err);

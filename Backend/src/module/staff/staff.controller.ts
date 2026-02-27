@@ -1,8 +1,8 @@
 import { Response, NextFunction } from "express";
-import { StatusCodes } from "http-status-codes";
-import { StaffService } from "./staff.service";
-import { successResponse } from "../../utils/helpers/response";
-import { AuthRequest } from "../../middlewares/types";
+import { StatusCodes }            from "http-status-codes";
+import { StaffService }           from "./staff.service";
+import { successResponse }        from "../../utils/helpers/response";
+import { AuthRequest }            from "../../middlewares/types";
 
 export class StaffController {
 
@@ -14,9 +14,7 @@ export class StaffController {
         try {
             const profile = await StaffService.getProfile(req.user!.userId);
             res.status(StatusCodes.OK).json(successResponse(profile));
-        } catch (err) {
-            next(err);
-        }
+        } catch (err) { next(err); }
     };
 
     static updateProfile = async (
@@ -25,10 +23,14 @@ export class StaffController {
         next: NextFunction
     ): Promise<void> => {
         try {
-            const updated = await StaffService.updateProfile(req.user!.userId, req.body);
-            res.status(StatusCodes.OK).json(successResponse(updated, "Profile updated successfully."));
-        } catch (err) {
-            next(err);
-        }
+            const updated = await StaffService.updateProfile(
+                req.user!.userId,
+                req.body,
+                req.file         
+            );
+            res.status(StatusCodes.OK).json(
+                successResponse(updated, "Profile updated successfully.")
+            );
+        } catch (err) { next(err); }
     };
 }

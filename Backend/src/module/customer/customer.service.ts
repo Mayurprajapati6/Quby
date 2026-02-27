@@ -1,20 +1,21 @@
 import { CustomerRepository } from "./customer.repository";
-import { uploadImage } from "../../utils/helpers/cloudinary";
+import { uploadImageBuffer } from "../../utils/helpers/cloudinary";
 import { ConflictError, NotFoundError, BadRequestError } from "../../utils/errors/app.error";
 import { toCustomerProfile } from "./customer.mapper";
 import { UpdateCustomerProfileDTO, CustomerProfile } from "./customer.types";
 
 export class CustomerService {
+
   static async getProfile(userId: string): Promise<CustomerProfile> {
     const customer = await CustomerRepository.findByUserId(userId);
     if (!customer) throw new NotFoundError("Customer profile not found.");
-
     return toCustomerProfile(customer.user, customer);
   }
 
   static async updateProfile(
     userId: string,
-    data: UpdateCustomerProfileDTO
+    data: UpdateCustomerProfileDTO,
+    avatarFile?: Express.Multer.File   
   ): Promise<CustomerProfile> {
     const customer = await CustomerRepository.findByUserId(userId);
     if (!customer) throw new NotFoundError("Customer profile not found.");
@@ -27,9 +28,9 @@ export class CustomerService {
     }
 
     let avatarUrl: string | undefined;
-    if (data.avatar) {
+    if (avatarFile) {
       try {
-        const uploaded = await uploadImage(data.avatar, "PROFILES");
+        const uploaded = await uploadImageBuffer(avatarFile, "PROFILES");
         avatarUrl = uploaded.secure_url;
       } catch (error: any) {
         throw new BadRequestError(`Avatar upload failed: ${error.message}`);
@@ -37,11 +38,11 @@ export class CustomerService {
     }
 
     const updated = await CustomerRepository.updateProfile(customer.id, {
-      name:      data.name,
-      phone:     data.phone,
-      city:      data.city,
-      state:     data.state,
-      gender:    data.gender,
+      name:   data.name,
+      phone:  data.phone,
+      city:   data.city,
+      state:  data.state,
+      gender: data.gender,
       ...(avatarUrl && { avatar_url: avatarUrl }),
     });
 

@@ -1,18 +1,22 @@
 import { OwnerRepository } from "./owner.repository";
-import { uploadImage } from "../../utils/helpers/cloudinary";
+import { uploadImageBuffer } from "../../utils/helpers/cloudinary";
 import { ConflictError, NotFoundError, BadRequestError } from "../../utils/errors/app.error";
 import { toOwnerProfile } from "./owner.mapper";
 import { UpdateOwnerProfileDTO, OwnerProfile } from "./owner.types";
 
 export class OwnerService {
+
   static async getProfile(userId: string): Promise<OwnerProfile> {
     const owner = await OwnerRepository.findByUserId(userId);
     if (!owner) throw new NotFoundError("Owner profile not found.");
-
     return toOwnerProfile(owner.user, owner);
   }
 
-  static async updateProfile(userId: string, data: UpdateOwnerProfileDTO): Promise<OwnerProfile> {
+  static async updateProfile(
+    userId: string,
+    data: UpdateOwnerProfileDTO,
+    avatarFile?: Express.Multer.File  
+  ): Promise<OwnerProfile> {
     const owner = await OwnerRepository.findByUserId(userId);
     if (!owner) throw new NotFoundError("Owner profile not found.");
 
@@ -24,9 +28,9 @@ export class OwnerService {
     }
 
     let avatarUrl: string | undefined;
-    if (data.avatar) {
+    if (avatarFile) {
       try {
-        const uploaded = await uploadImage(data.avatar, "PROFILES");
+        const uploaded = await uploadImageBuffer(avatarFile, "PROFILES");
         avatarUrl = uploaded.secure_url;
       } catch (error: any) {
         throw new BadRequestError(`Avatar upload failed: ${error.message}`);

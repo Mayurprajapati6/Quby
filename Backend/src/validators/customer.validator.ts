@@ -15,7 +15,6 @@ export const updateCustomerProfileSchema = z
     city:   city.optional(),
     state:  state.optional(),
     gender: gender.optional(),
-    avatar: z.string().optional(),
   })
   .refine((data) => Object.keys(data).length > 0, {
     message: "At least one field must be provided.",
