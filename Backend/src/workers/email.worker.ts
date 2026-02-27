@@ -4,6 +4,7 @@ import { sendEmail } from '../../src/services/email.services';
 import { QUEUE_NAMES, deadLetterQueue, DeadLetterJobData } from '../config/bullmq';
 import logger from '../config/logger.config';
 import type { EmailJobType } from '../config/bullmq';
+//import { OwnerStaffService } from '../module/owner/staff/owner-staff.service';
 
 interface EmailJobData {
     to:   string;
@@ -11,26 +12,51 @@ interface EmailJobData {
     data: Record<string, unknown>;
 }
 
-export const emailWorker = new Worker<EmailJobData>(
+// Separate type for the delayed reinvitation job — has no 'to'/'type' fields
+interface ReinvitationJobData {
+    staffUserId: string;
+    businessId:  string;
+    ownerId:     string;
+}
+
+export const emailWorker = new Worker<EmailJobData | ReinvitationJobData>(
     QUEUE_NAMES.EMAIL,
-    async (job: Job<EmailJobData>) => {
-        const { to, type, data } = job.data;
+    async (job: Job<EmailJobData | ReinvitationJobData>) => {
+
+        // ── Auto-reinvitation branch ──────────────────────────────────────────
+        // These are delayed BullMQ jobs, not standard email jobs.
+        // They carry staffUserId/businessId/ownerId instead of to/type/data.
+        if (job.name === 'staff-reinvitation') {
+            const { staffUserId, businessId, ownerId } = job.data as ReinvitationJobData;
+            logger.info(`[Email Worker] Processing auto-reinvitation for staff user ${staffUserId}`);
+            //await OwnerStaffService.processAutoReinvitation(staffUserId, businessId, ownerId);
+            return { success: true, type: 'staff-reinvitation', staffUserId };
+        }
+
+        // ── Standard email branch ─────────────────────────────────────────────
+        const { to, type, data } = job.data as EmailJobData;
         logger.info(`[Email Worker] Processing job ${job.id}: '${type}' → ${to}`);
         await sendEmail(to, type, data);
         return { success: true, to, type };
     },
     {
         connection:  redisClient,
-        concurrency: 5,           
+        concurrency: 5,
         limiter: {
-            max:      100,          
-            duration: 60_000,    
+            max:      100,
+            duration: 60_000,
         },
     }
 );
 
 emailWorker.on('completed', (job) => {
-    logger.info(`[Email Worker] Job ${job.id} completed (${job.data.type} → ${job.data.to})`);
+    if (job.name === 'staff-reinvitation') {
+        const { staffUserId } = job.data as ReinvitationJobData;
+        logger.info(`[Email Worker] Job ${job.id} completed (staff-reinvitation → user ${staffUserId})`);
+        return;
+    }
+    const { type, to } = job.data as EmailJobData;
+    logger.info(`[Email Worker] Job ${job.id} completed (${type} → ${to})`);
 });
 
 emailWorker.on('failed', async (job, err) => {
@@ -38,9 +64,12 @@ emailWorker.on('failed', async (job, err) => {
 
     if (job && job.attemptsMade >= (job.opts.attempts ?? 3)) {
         logger.error(`[Email Worker] All retries exhausted for job ${job.id} — routing to DLQ`, {
-            type:      job.data.type,
-            recipient: job.data.to,
-            error:     err.message,
+            jobName: job.name,
+            error:   err.message,
+            ...(job.name === 'staff-reinvitation'
+                ? { staffUserId: (job.data as ReinvitationJobData).staffUserId }
+                : { type: (job.data as EmailJobData).type, recipient: (job.data as EmailJobData).to }
+            ),
         });
 
         try {

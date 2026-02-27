@@ -31,6 +31,7 @@ import {
   TokenResult,
 } from "./auth.types";
 import { AUTH_MESSAGES } from "../../constants/messages";
+import { queueEmail } from "../../services/email.services"; 
 
 const MAX_SESSIONS = 5;
 
@@ -127,17 +128,13 @@ export class AuthService {
           "You are not assigned to any business. Please contact your employer."
         );
       }
-    }
-
-    else if (user.role === "ADMIN") {
+    } else if (user.role === "ADMIN") {
       const admin = await AuthRepository.findAdminByUserId(user.id);
 
       if (!admin || !admin.is_active) {
         throw new UnauthorizedError(AUTH_MESSAGES.ACCOUNT_DEACTIVATED);
       }
-    }
-
-    else {
+    } else {
       if (!user.is_active) {
         throw new UnauthorizedError(AUTH_MESSAGES.ACCOUNT_DEACTIVATED);
       }
@@ -304,8 +301,7 @@ export class AuthService {
     if (!refreshToken) return;
     try {
       await AuthRepository.revokeRefreshToken(refreshToken);
-    } catch {
-    }
+    } catch {}
   }
 
   static async logoutAllDevices(userId: string): Promise<void> {
@@ -317,9 +313,7 @@ export class AuthService {
     const user = await AuthRepository.findUserByEmail(data.email);
 
     if (!user) return;
-
     if (user.role === "STAFF" && !user.password_hash) return;
-
     if (!user.is_active) return;
 
     const rawToken = generateToken();
@@ -331,9 +325,16 @@ export class AuthService {
       expiresAt: add(new Date(), { hours: 1 }),
     });
 
-    // TODO: Send via email service (notification module)
-    // await emailService.sendPasswordReset(user.email, rawToken);
-    console.log(`[DEV] Password reset token for ${user.email}: ${rawToken}`);
+    const name = await AuthService.getNameByRole(
+      user.id,
+      user.role as JwtPayload["role"]
+    );
+
+    await queueEmail({
+      to:   user.email,
+      type: "password-reset",
+      data: { name, otp: rawToken },
+    });
   }
 
   static async resetPassword(data: ResetPasswordDTO): Promise<void> {
@@ -406,7 +407,7 @@ export class AuthService {
     await AuthRepository.deleteUser(userId);
   }
 
-  private static async getNameByRole(
+  static async getNameByRole(
     userId: string,
     role: JwtPayload["role"]
   ): Promise<string> {
@@ -441,7 +442,7 @@ export class AuthService {
   ): Promise<TokenResult> {
     const payload: JwtPayload = { userId, role, version };
 
-    const accessToken = signAccessToken(payload);
+    const accessToken  = signAccessToken(payload);
     const refreshToken = signRefreshToken(payload);
 
     await AuthRepository.saveRefreshToken({
