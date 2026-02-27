@@ -1,0 +1,36 @@
+import { Response, NextFunction } from "express";
+import { StatusCodes } from "http-status-codes";
+import { AdminService } from "./admin.service";
+import { successResponse } from "../../utils/helpers/response";
+import { AuthRequest } from "../../middlewares/types";
+
+export class AdminController {
+    
+  static getProfile = async (
+    req: AuthRequest,
+    res: Response,
+    next: NextFunction
+  ): Promise<void> => {
+    try {
+      const profile = await AdminService.getProfile(req.user!.userId);
+      res.status(StatusCodes.OK).json(successResponse(profile));
+    } catch (err) {
+      next(err);
+    }
+  };
+
+  static updateProfile = async (
+    req: AuthRequest,
+    res: Response,
+    next: NextFunction
+  ): Promise<void> => {
+    try {
+      const updated = await AdminService.updateProfile(req.user!.userId, req.body);
+      res.status(StatusCodes.OK).json(
+        successResponse(updated, "Profile updated successfully.")
+      );
+    } catch (err) {
+      next(err);
+    }
+  };
+}
