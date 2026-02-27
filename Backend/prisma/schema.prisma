@@ -22,7 +22,6 @@ enum UserRole {
 
 enum BusinessType {
   SALON
-  SPA
 }
 
 enum ServiceFor {
@@ -794,9 +793,6 @@ model PlatformService {
   service_for ServiceFor
 
   image_url String? @db.VarChar(500)
-
-  default_duration Int
-  default_price    Int?
 
   is_active  Boolean @default(true)
   sort_order Int     @default(0)
