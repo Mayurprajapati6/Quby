@@ -11,14 +11,14 @@ cloudinary.config({
 export const CLOUDINARY_FOLDERS = {
   PROFILES:   "profiles",
   BUSINESSES: "businesses",
+  SERVICES:   "services",
   REVIEWS:    "reviews",
 } as const;
 
 export type CloudinaryFolder = keyof typeof CLOUDINARY_FOLDERS;
 
-const MAX_FILE_SIZE_BYTES = 5 * 1024 * 1024; 
-const ALLOWED_FORMATS     = ["jpg", "jpeg", "png", "webp"];
-
+const MAX_FILE_SIZE_BYTES = 5 * 1024 * 1024; // 5MB
+const ALLOWED_MIMETYPES   = ["image/jpeg", "image/png", "image/webp"];
 export interface UploadResult {
   secure_url:    string;
   public_id:     string;
@@ -29,76 +29,72 @@ export interface UploadResult {
   thumbnail_url: string | undefined;
   medium_url:    string | undefined;
 }
-
 export interface BulkDeleteResult {
   success: string[];
   failed:  string[];
 }
 
-function validateImageFile(file: string): void {
-  if (!file.startsWith("data:image/")) {
-    throw new BadRequestError("Invalid file. Must be a base64 encoded image.");
+export function validateImageBuffer(file: Express.Multer.File): void {
+  if (!ALLOWED_MIMETYPES.includes(file.mimetype)) {
+    throw new BadRequestError(
+      `Unsupported format. Allowed: ${ALLOWED_MIMETYPES.join(", ")}.`
+    );
   }
-
-  const base64Data = file.split(",")[1];
-  if (!base64Data) {
-    throw new BadRequestError("Invalid base64 image data.");
-  }
-
-  const sizeInBytes = (base64Data.length * 3) / 4;
-  if (sizeInBytes > MAX_FILE_SIZE_BYTES) {
+  if (file.size > MAX_FILE_SIZE_BYTES) {
     throw new BadRequestError(
       `Image size exceeds the ${MAX_FILE_SIZE_BYTES / (1024 * 1024)}MB limit.`
     );
   }
-
-  const formatMatch = file.match(/data:image\/(\w+);/);
-  const format = formatMatch?.[1] ?? null;
-
-  if (!format || !ALLOWED_FORMATS.includes(format)) {
-    throw new BadRequestError(
-      `Unsupported format. Allowed: ${ALLOWED_FORMATS.join(", ")}.`
-    );
-  }
 }
 
-export async function uploadImage(
-  file: string,
+export async function uploadImageBuffer(
+  file: Express.Multer.File,
   folder: CloudinaryFolder = "PROFILES"
 ): Promise<UploadResult> {
-  validateImageFile(file);
+  validateImageBuffer(file);
 
-  try {
-    const result = await cloudinary.uploader.upload(file, {
-      folder:        CLOUDINARY_FOLDERS[folder],
-      resource_type: "image",
-      transformation: [
-        { width: 1920, height: 1080, crop: "limit" },
-        { quality: "auto:good" },
-        { fetch_format: "auto" },
-      ],
-      eager: [
-        { width: 400, height: 300, crop: "fill", quality: "auto:good" }, // thumbnail
-        { width: 800, height: 600, crop: "fill", quality: "auto:good" }, // medium
-      ],
-      eager_async: true,
-    });
+  return new Promise((resolve, reject) => {
+    const uploadStream = cloudinary.uploader.upload_stream(
+      {
+        folder:        CLOUDINARY_FOLDERS[folder],
+        resource_type: "image",
+        transformation: [
+          { width: 1920, height: 1080, crop: "limit" },
+          { quality: "auto:good" },
+          { fetch_format: "auto" },
+        ],
+        eager: [
+          { width: 400, height: 300, crop: "fill", quality: "auto:good" }, // thumbnail
+          { width: 800, height: 600, crop: "fill", quality: "auto:good" }, // medium
+        ],
+        eager_async: true,
+      },
+      (error, result) => {
+        if (error || !result) {
+          return reject(new BadRequestError(`Image upload failed: ${error?.message ?? "Unknown error"}`));
+        }
+        resolve({
+          secure_url:    result.secure_url,
+          public_id:     result.public_id,
+          format:        result.format,
+          width:         result.width,
+          height:        result.height,
+          bytes:         result.bytes,
+          thumbnail_url: result.eager?.[0]?.secure_url,
+          medium_url:    result.eager?.[1]?.secure_url,
+        });
+      }
+    );
 
-    return {
-      secure_url:    result.secure_url,
-      public_id:     result.public_id,
-      format:        result.format,
-      width:         result.width,
-      height:        result.height,
-      bytes:         result.bytes,
-      thumbnail_url: result.eager?.[0]?.secure_url,
-      medium_url:    result.eager?.[1]?.secure_url,
-    };
-  } catch (error: any) {
-    if (error instanceof BadRequestError) throw error;
-    console.error("[Cloudinary] Upload error:", error);
-    throw new BadRequestError(`Image upload failed: ${error.message ?? "Unknown error"}`);
-  }
+    uploadStream.end(file.buffer);
+  });
+}
+
+export async function uploadMultipleImageBuffers(
+  files: Express.Multer.File[],
+  folder: CloudinaryFolder = "BUSINESSES"
+): Promise<UploadResult[]> {
+  return Promise.all(files.map((file) => uploadImageBuffer(file, folder)));
 }
 
 export async function deleteFromCloudinary(publicId: string): Promise<boolean> {
@@ -106,10 +102,8 @@ export async function deleteFromCloudinary(publicId: string): Promise<boolean> {
 
   try {
     const result = await cloudinary.uploader.destroy(publicId);
-
     if (result.result === "ok")        return true;
-    if (result.result === "not found") return true; // Already gone — treat as success
-
+    if (result.result === "not found") return true; 
     console.error(`[Cloudinary] Delete failed for ${publicId}:`, result);
     return false;
   } catch (error: any) {
@@ -141,13 +135,10 @@ export function getOptimizedImageUrl(
   height?: number
 ): string {
   const transformations: string[] = [];
-
   if (width || height) {
     transformations.push(`w_${width ?? "auto"},h_${height ?? "auto"},c_fill`);
   }
-
   transformations.push("q_auto:good", "f_auto");
-
   return cloudinary.url(publicId, { transformation: transformations, secure: true });
 }
 
@@ -159,4 +150,13 @@ export function getResponsiveImageUrls(publicId: string) {
     large:     getOptimizedImageUrl(publicId, 1920, 1080),
     original:  cloudinary.url(publicId, { secure: true }),
   };
+}
+
+export function extractPublicId(url: string): string | undefined {
+  try {
+    const match = url.match(/\/upload\/(?:v\d+\/)?(.+?)(\.\w+)?$/);
+    return match?.[1];
+  } catch {
+    return undefined;
+  }
 }
