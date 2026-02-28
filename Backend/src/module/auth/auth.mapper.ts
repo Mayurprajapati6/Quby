@@ -1,13 +1,17 @@
-import { MinimalUserInfo } from "./auth.types";
+import { MinimalUserInfo } from './auth.types';
 
-export const toMinimalUser = (user: {
-  id: string;
-  email: string;
-  name: string;
-  role: 'CUSTOMER' | 'STAFF' | 'OWNER' | 'ADMIN';
-}): MinimalUserInfo => ({
-  id: user.id,
-  email: user.email,
-  name: user.name,
-  role: user.role,
-});
+export function toMinimalUser(data: {
+  id:          string;
+  email:       string;
+  name:        string;
+  role:        MinimalUserInfo['role'];
+  businessId?: string;
+}): MinimalUserInfo {
+  return {
+    id:          data.id,
+    email:       data.email,
+    name:        data.name,
+    role:        data.role,
+    businessId:  data.businessId,
+  };
+}

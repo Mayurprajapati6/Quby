@@ -1,85 +1,92 @@
 export interface JwtPayload {
-  userId: string;
-  role: "CUSTOMER" | "STAFF" | "OWNER" | "ADMIN";
-  version: number;
+  userId:      string;
+  role:        'CUSTOMER' | 'STAFF' | 'OWNER' | 'ADMIN' | 'BUSINESS';
+  version:     number;
+  businessId?: string;
 }
+
 export interface UserSignupDTO {
-  name: string;
-  email: string;
+  name:     string;
+  email:    string;
   password: string;
-  city: string;
-  state: string;
-  phone?: string;
-  role: "CUSTOMER" | "OWNER";
+  city:     string;
+  state:    string;
+  phone?:   string;
+  role:     'CUSTOMER' | 'OWNER';
 }
+
 export interface LoginDTO {
-  email: string;
+  email:    string;
   password: string;
 }
+
 export interface StaffSetupDTO {
-  token: string;
+  token:       string;
   newPassword: string;
 }
+
 export interface ForgotPasswordDTO {
   email: string;
 }
 
 export interface ResetPasswordDTO {
-  token: string;
+  token:       string;
   newPassword: string;
 }
 
 export interface ChangePasswordDTO {
   currentPassword: string;
-  newPassword: string;
+  newPassword:     string;
 }
+
 export interface DeleteAccountDTO {
   password: string;
 }
 export interface MinimalUserInfo {
-  id: string;
-  email: string;
-  name: string;
-  role: "CUSTOMER" | "STAFF" | "OWNER" | "ADMIN";
+  id:          string;
+  email:       string;
+  name:        string;
+  role:        'CUSTOMER' | 'STAFF' | 'OWNER' | 'ADMIN' | 'BUSINESS';
+  businessId?: string;  
+}
+export interface TokenResult {
+  accessToken:  string;
+  refreshToken: string;
+  user:         MinimalUserInfo;
 }
 
-export interface TokenResult {
-  accessToken: string;
-  refreshToken: string;
-  user: MinimalUserInfo;
-}
 export interface CreateCustomerProfileDTO {
   userId: string;
-  name: string;
-  city: string;
-  state: string;
+  name:   string;
+  city:   string;
+  state:  string;
   phone?: string;
 }
 
 export interface CreateOwnerProfileDTO {
   userId: string;
-  name: string;
-  city: string;
-  state: string;
-  phone: string;
+  name:   string;
+  city:   string;
+  state:  string;
+  phone:  string;
 }
 
 export interface SaveRefreshTokenDTO {
-  userId: string;
-  token: string;
-  expiresAt: Date;
+  userId:     string;
+  token:      string;
+  expiresAt:  Date;
   ipAddress?: string;
   userAgent?: string;
 }
 
 export interface CreatePasswordResetTokenDTO {
-  userId: string;
-  token: string;
+  userId:    string;
+  token:     string;
   expiresAt: Date;
 }
 
 export interface CreateStaffSetupTokenDTO {
-  userId: string;
-  token: string;
+  userId:    string;
+  token:     string;
   expiresAt: Date;
 }
