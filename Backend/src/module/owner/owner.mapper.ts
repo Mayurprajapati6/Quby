@@ -45,6 +45,6 @@ export const toOwnerProfile = (
   total_staff:       owner.total_staff,
   total_bookings:    owner.total_bookings,
   lifetime_earnings: owner.lifetime_earnings,
-  createdAt:         owner.created_at,
-  updatedAt:         owner.updated_at,
+  created_at:         owner.created_at,
+  updated_at:         owner.updated_at,
 });

@@ -14,8 +14,8 @@ export interface OwnerProfile {
   total_staff: number;
   total_bookings: number;
   lifetime_earnings: number;
-  createdAt: Date;
-  updatedAt: Date;
+  created_at: Date;
+  updated_at: Date;
 }
 
 export interface UpdateOwnerProfileDTO {
