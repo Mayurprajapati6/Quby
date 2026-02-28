@@ -1,9 +1,3 @@
-// This is your Prisma schema file,
-// learn more about it in the docs: https://pris.ly/d/prisma-schema
-
-// Looking for ways to speed up your queries, or scale easily with your serverless or edge functions?
-// Try Prisma Accelerate: https://pris.ly/cli/accelerate-init
-
 generator client {
   provider = "prisma-client"
   output   = "../generated/prisma"
@@ -18,6 +12,7 @@ enum UserRole {
   STAFF
   OWNER
   ADMIN
+  BUSINESS
 }
 
 enum BusinessType {
@@ -119,10 +114,12 @@ enum CustomerNotificationType {
 
 enum BusinessNotificationType {
   NEW_BOOKING
+  BOOKING_CONFIRMED
   BOOKING_CANCELLED
   STAFF_LEAVE_REQUEST
   NEW_REVIEW
   PAYMENT_RECEIVED
+  ESCROW_RELEASED
   LOW_RATING_ALERT
   BUSINESS_VERIFIED
   BUSINESS_REJECTED
@@ -175,6 +172,7 @@ model User {
   owner_profile    Owner?
   staff_profile    Staff?
   admin_profile    Admin?
+  business_auth    Business? @relation("BusinessAuth")
 
   refresh_tokens            RefreshToken[]
   password_reset_tokens     PasswordResetToken[]
@@ -352,12 +350,15 @@ model CustomerNotification {
   is_read Boolean   @default(false)
   read_at DateTime? @db.Timestamptz(3)
 
+  expires_at DateTime? @db.Timestamptz(3)
+
   created_at DateTime @default(now()) @db.Timestamptz(3)
 
   customer Customer @relation(fields: [customer_id], references: [id], onDelete: Cascade)
 
   @@index([customer_id, created_at])
   @@index([customer_id, is_read])
+  @@index([expires_at])
   @@map("customer_notifications")
 }
 
@@ -396,6 +397,9 @@ model Owner {
 model Business {
   id       String @id @default(uuid())
   owner_id String
+
+  auth_user_id String? @unique @db.VarChar(36)
+  auth_user    User?   @relation("BusinessAuth", fields: [auth_user_id], references: [id], onDelete: SetNull)
 
   business_name String       @db.VarChar(200)
   slug          String       @unique @db.VarChar(255)
@@ -451,6 +455,7 @@ model Business {
   @@index([business_type, service_for])
   @@index([is_verified, is_active])
   @@index([latitude, longitude])
+  @@index([auth_user_id])
   @@map("businesses")
 }
 
@@ -506,8 +511,12 @@ model BusinessNotification {
   data       Json?   @db.JsonB
   action_url String? @db.VarChar(500)
 
+  target String @default("BOTH") @db.VarChar(10)
+
   is_read Boolean   @default(false)
   read_at DateTime? @db.Timestamptz(3)
+
+  expires_at DateTime? @db.Timestamptz(3)
 
   created_at DateTime @default(now()) @db.Timestamptz(3)
 
@@ -515,6 +524,8 @@ model BusinessNotification {
 
   @@index([business_id, created_at])
   @@index([business_id, is_read])
+  @@index([business_id, target])
+  @@index([expires_at])
   @@map("business_notifications")
 }
 
@@ -754,12 +765,15 @@ model StaffNotification {
   is_read Boolean   @default(false)
   read_at DateTime? @db.Timestamptz(3)
 
+  expires_at DateTime? @db.Timestamptz(3)
+
   created_at DateTime @default(now()) @db.Timestamptz(3)
 
   staff Staff @relation(fields: [staff_id], references: [id], onDelete: Cascade)
 
   @@index([staff_id, created_at])
   @@index([staff_id, is_read])
+  @@index([expires_at])
   @@map("staff_notifications")
 }
 
@@ -1113,8 +1127,7 @@ model PlatformConfig {
   value String @db.VarChar(255)
 
   description String? @db.Text
-
-  updated_by String?
+  updated_by  String?
 
   created_at DateTime @default(now()) @db.Timestamptz(3)
   updated_at DateTime @updatedAt @db.Timestamptz(3)
