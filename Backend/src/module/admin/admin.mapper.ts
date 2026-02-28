@@ -20,6 +20,6 @@ export const toAdminProfile = (
   role:        'ADMIN',
   is_active:   admin.is_active,
   permissions: admin.permissions,
-  createdAt:   admin.created_at,
+  created_at:   admin.created_at,
   lastLoginAt: user.last_login_at,
 });

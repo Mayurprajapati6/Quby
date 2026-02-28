@@ -7,7 +7,7 @@ export interface AdminProfile {
   role: 'ADMIN';
   is_active: boolean;
   permissions: any;
-  createdAt: Date;
+  created_at: Date;
   lastLoginAt: Date | null;
 }
 
