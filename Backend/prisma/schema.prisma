@@ -39,7 +39,7 @@ enum BookingStatus {
   CONFIRMED
   CHECKED_IN
   IN_PROGRESS
-  RUNNING        
+  RUNNING
   COMPLETED
   CANCELLED
   CANCELLED_TIMEOUT
@@ -87,10 +87,10 @@ enum AttendanceStatus {
 }
 
 enum AttendanceSource {
-  BOOKING           
-  BUSINESS_MANUAL   
-  LEAVE_SYSTEM      
-  HOLIDAY_SYSTEM   
+  BOOKING
+  BUSINESS_MANUAL
+  LEAVE_SYSTEM
+  HOLIDAY_SYSTEM
 }
 
 enum BookingEventType {
@@ -122,6 +122,7 @@ enum CustomerNotificationType {
   SERVICE_READY
   SERVICE_COMPLETED
   SERVICE_DELAYED
+  QUEUE_SHIFTED
   BOOKING_CANCELLED
   REFUND_PROCESSED
   REVIEW_REQUEST
@@ -144,8 +145,11 @@ enum BusinessNotificationType {
   BUSINESS_REJECTED
   BUSINESS_SUSPENDED
   SERVICE_DELAYED
+  SERVICE_EXTENDED
+  QUEUE_SHIFTED
   CUSTOMER_NO_SHOW
   HOLIDAY_CREATED
+  REVIEW_RECEIVED
 }
 
 enum StaffNotificationType {
@@ -157,13 +161,14 @@ enum StaffNotificationType {
   LEAVE_APPROVED
   LEAVE_REJECTED
   NEW_REVIEW
+  REVIEW_RECEIVED
   REVIEW_REPLY
   DAILY_SUMMARY
   PERFORMANCE_UPDATE
   BUSINESS_HOLIDAY
   ACCOUNT_SUSPENDED
   SERVICE_DELAYED
-  
+  SERVICE_EXTENDED
 }
 
 enum WalletTransactionType {
@@ -178,6 +183,7 @@ enum BusinessWalletTransactionType {
   WITHDRAWAL
   REFUND_DEDUCTION
 }
+
 model User {
   id            String   @id @default(uuid())
   email         String   @unique @db.VarChar(255)
@@ -188,14 +194,14 @@ model User {
   is_verified       Boolean   @default(false)
   email_verified_at DateTime? @db.Timestamptz(3)
 
-  is_suspended      Boolean   @default(false)
-  suspended_at      DateTime? @db.Timestamptz(3)
-  suspended_reason  String?   @db.Text
+  is_suspended     Boolean   @default(false)
+  suspended_at     DateTime? @db.Timestamptz(3)
+  suspended_reason String?   @db.Text
 
   version Int @default(1)
 
   created_at    DateTime  @default(now()) @db.Timestamptz(3)
-  updated_at    DateTime  @updatedAt      @db.Timestamptz(3)
+  updated_at    DateTime  @updatedAt @db.Timestamptz(3)
   last_login_at DateTime? @db.Timestamptz(3)
 
   customer_profile Customer?
@@ -213,6 +219,7 @@ model User {
   @@index([is_suspended])
   @@map("users")
 }
+
 model RefreshToken {
   id         String    @id @default(uuid())
   user_id    String
@@ -233,6 +240,7 @@ model RefreshToken {
   @@index([expires_at])
   @@map("refresh_tokens")
 }
+
 model PasswordResetToken {
   id         String    @id @default(uuid())
   user_id    String
@@ -269,7 +277,7 @@ model Customer {
   id      String @id @default(uuid())
   user_id String @unique
 
-  username   String  @unique @db.VarChar(50)
+  username String @unique @db.VarChar(50)
 
   name       String  @db.VarChar(100)
   phone      String? @db.VarChar(20)
@@ -295,7 +303,7 @@ model Customer {
   last_booking_date DateTime? @db.Timestamptz(3)
 
   created_at DateTime @default(now()) @db.Timestamptz(3)
-  updated_at DateTime @updatedAt      @db.Timestamptz(3)
+  updated_at DateTime @updatedAt @db.Timestamptz(3)
 
   user          User                   @relation(fields: [user_id], references: [id], onDelete: Cascade)
   bookings      Booking[]
@@ -311,6 +319,7 @@ model Customer {
   @@index([phone])
   @@map("customers")
 }
+
 model CustomerFavourite {
   id          String @id @default(uuid())
   customer_id String
@@ -325,6 +334,7 @@ model CustomerFavourite {
   @@index([customer_id])
   @@map("customer_favourites")
 }
+
 model CustomerWallet {
   id          String @id @default(uuid())
   customer_id String @unique
@@ -336,7 +346,7 @@ model CustomerWallet {
   lifetime_refunds Int @default(0)
 
   created_at DateTime @default(now()) @db.Timestamptz(3)
-  updated_at DateTime @updatedAt      @db.Timestamptz(3)
+  updated_at DateTime @updatedAt @db.Timestamptz(3)
 
   customer     Customer                    @relation(fields: [customer_id], references: [id], onDelete: Cascade)
   transactions CustomerWalletTransaction[]
@@ -344,6 +354,7 @@ model CustomerWallet {
   @@index([customer_id])
   @@map("customer_wallets")
 }
+
 model CustomerWalletTransaction {
   id        String @id @default(uuid())
   wallet_id String
@@ -366,6 +377,7 @@ model CustomerWalletTransaction {
   @@index([booking_id])
   @@map("customer_wallet_transactions")
 }
+
 model CustomerNotification {
   id          String @id @default(uuid())
   customer_id String
@@ -391,6 +403,7 @@ model CustomerNotification {
   @@index([expires_at])
   @@map("customer_notifications")
 }
+
 model Owner {
   id      String @id @default(uuid())
   user_id String @unique
@@ -417,7 +430,7 @@ model Owner {
   verified_at DateTime? @db.Timestamptz(3)
 
   created_at DateTime @default(now()) @db.Timestamptz(3)
-  updated_at DateTime @updatedAt      @db.Timestamptz(3)
+  updated_at DateTime @updatedAt @db.Timestamptz(3)
 
   user       User       @relation(fields: [user_id], references: [id], onDelete: Cascade)
   businesses Business[]
@@ -426,6 +439,7 @@ model Owner {
   @@index([phone])
   @@map("owners")
 }
+
 model Business {
   id       String @id @default(uuid())
   owner_id String
@@ -448,16 +462,16 @@ model Business {
   latitude      Float?
   longitude     Float?
 
-  map_link       String? @db.VarChar(1000)
+  map_link String? @db.VarChar(1000)
 
   business_email String? @db.VarChar(255)
   business_phone String? @db.VarChar(20)
   website_url    String? @db.VarChar(500)
 
-  instagram_url  String? @db.VarChar(500)
-  facebook_url   String? @db.VarChar(500)
-  twitter_url    String? @db.VarChar(500)
-  youtube_url    String? @db.VarChar(500)
+  instagram_url   String? @db.VarChar(500)
+  facebook_url    String? @db.VarChar(500)
+  twitter_url     String? @db.VarChar(500)
+  youtube_url     String? @db.VarChar(500)
   whatsapp_number String? @db.VarChar(20)
 
   logo_url        String? @db.VarChar(500)
@@ -475,7 +489,7 @@ model Business {
   total_reviews  Int    @default(0)
 
   created_at DateTime @default(now()) @db.Timestamptz(3)
-  updated_at DateTime @updatedAt      @db.Timestamptz(3)
+  updated_at DateTime @updatedAt @db.Timestamptz(3)
 
   owner         Owner                     @relation(fields: [owner_id], references: [id], onDelete: Cascade)
   staff         Staff[]
@@ -498,6 +512,7 @@ model Business {
   @@index([auth_user_id])
   @@map("businesses")
 }
+
 model BusinessSchedule {
   id          String @id @default(uuid())
   business_id String
@@ -509,7 +524,7 @@ model BusinessSchedule {
   close_time String? @db.VarChar(5)
 
   created_at DateTime @default(now()) @db.Timestamptz(3)
-  updated_at DateTime @updatedAt      @db.Timestamptz(3)
+  updated_at DateTime @updatedAt @db.Timestamptz(3)
 
   business Business @relation(fields: [business_id], references: [id], onDelete: Cascade)
 
@@ -517,6 +532,7 @@ model BusinessSchedule {
   @@index([business_id])
   @@map("business_schedules")
 }
+
 model BusinessImage {
   id          String @id @default(uuid())
   business_id String
@@ -538,6 +554,7 @@ model BusinessImage {
   @@index([is_primary])
   @@map("business_images")
 }
+
 model BusinessNotification {
   id          String @id @default(uuid())
   business_id String
@@ -566,6 +583,7 @@ model BusinessNotification {
   @@index([expires_at])
   @@map("business_notifications")
 }
+
 model BusinessWallet {
   id          String @id @default(uuid())
   business_id String @unique
@@ -577,7 +595,7 @@ model BusinessWallet {
   version Int @default(1)
 
   created_at DateTime @default(now()) @db.Timestamptz(3)
-  updated_at DateTime @updatedAt      @db.Timestamptz(3)
+  updated_at DateTime @updatedAt @db.Timestamptz(3)
 
   business     Business                    @relation(fields: [business_id], references: [id], onDelete: Cascade)
   transactions BusinessWalletTransaction[]
@@ -585,6 +603,7 @@ model BusinessWallet {
   @@index([business_id])
   @@map("business_wallets")
 }
+
 model BusinessWalletTransaction {
   id        String @id @default(uuid())
   wallet_id String
@@ -607,6 +626,7 @@ model BusinessWalletTransaction {
   @@index([booking_id])
   @@map("business_wallet_transactions")
 }
+
 model Holiday {
   id          String @id @default(uuid())
   business_id String
@@ -620,7 +640,7 @@ model Holiday {
   applies_to_all_staff Boolean @default(true)
 
   created_at DateTime @default(now()) @db.Timestamptz(3)
-  updated_at DateTime @updatedAt      @db.Timestamptz(3)
+  updated_at DateTime @updatedAt @db.Timestamptz(3)
 
   business       Business       @relation(fields: [business_id], references: [id], onDelete: Cascade)
   staff_holidays StaffHoliday[]
@@ -628,6 +648,7 @@ model Holiday {
   @@index([business_id, start_date, end_date])
   @@map("holidays")
 }
+
 model StaffHoliday {
   id         String @id @default(uuid())
   holiday_id String
@@ -641,6 +662,7 @@ model StaffHoliday {
   @@unique([holiday_id, staff_id])
   @@map("staff_holidays")
 }
+
 model Staff {
   id          String @id @default(uuid())
   user_id     String @unique
@@ -669,7 +691,7 @@ model Staff {
   last_service_date      DateTime? @db.Timestamptz(3)
 
   created_at DateTime @default(now()) @db.Timestamptz(3)
-  updated_at DateTime @updatedAt      @db.Timestamptz(3)
+  updated_at DateTime @updatedAt @db.Timestamptz(3)
 
   user     User     @relation(fields: [user_id], references: [id], onDelete: Cascade)
   business Business @relation(fields: [business_id], references: [id], onDelete: Cascade)
@@ -693,6 +715,7 @@ model Staff {
   @@index([phone])
   @@map("staff")
 }
+
 model StaffSchedule {
   id       String @id @default(uuid())
   staff_id String
@@ -704,7 +727,7 @@ model StaffSchedule {
   end_time   String? @db.VarChar(5)
 
   created_at DateTime @default(now()) @db.Timestamptz(3)
-  updated_at DateTime @updatedAt      @db.Timestamptz(3)
+  updated_at DateTime @updatedAt @db.Timestamptz(3)
 
   staff Staff @relation(fields: [staff_id], references: [id], onDelete: Cascade)
 
@@ -712,6 +735,7 @@ model StaffSchedule {
   @@index([staff_id])
   @@map("staff_schedules")
 }
+
 model StaffLeave {
   id       String @id @default(uuid())
   staff_id String
@@ -729,7 +753,7 @@ model StaffLeave {
   rejection_reason String?   @db.Text
 
   created_at DateTime @default(now()) @db.Timestamptz(3)
-  updated_at DateTime @updatedAt      @db.Timestamptz(3)
+  updated_at DateTime @updatedAt @db.Timestamptz(3)
 
   staff Staff @relation(fields: [staff_id], references: [id], onDelete: Cascade)
 
@@ -737,6 +761,7 @@ model StaffLeave {
   @@index([status])
   @@map("staff_leaves")
 }
+
 model StaffAttendance {
   id          String @id @default(uuid())
   staff_id    String
@@ -755,7 +780,7 @@ model StaffAttendance {
   notes          String? @db.Text
 
   created_at DateTime @default(now()) @db.Timestamptz(3)
-  updated_at DateTime @updatedAt      @db.Timestamptz(3)
+  updated_at DateTime @updatedAt @db.Timestamptz(3)
 
   staff Staff @relation(fields: [staff_id], references: [id], onDelete: Cascade)
 
@@ -765,6 +790,7 @@ model StaffAttendance {
   @@index([business_id, date, status])
   @@map("staff_attendance")
 }
+
 model StaffPerformance {
   id       String   @id @default(uuid())
   staff_id String
@@ -780,7 +806,7 @@ model StaffPerformance {
   avg_delay_minutes Float
 
   created_at DateTime @default(now()) @db.Timestamptz(3)
-  updated_at DateTime @updatedAt      @db.Timestamptz(3)
+  updated_at DateTime @updatedAt @db.Timestamptz(3)
 
   staff Staff @relation(fields: [staff_id], references: [id], onDelete: Cascade)
 
@@ -788,6 +814,7 @@ model StaffPerformance {
   @@index([staff_id, month])
   @@map("staff_performance")
 }
+
 model StaffNotification {
   id       String @id @default(uuid())
   staff_id String
@@ -813,6 +840,7 @@ model StaffNotification {
   @@index([expires_at])
   @@map("staff_notifications")
 }
+
 model Admin {
   id      String @id @default(uuid())
   user_id String @unique
@@ -830,7 +858,7 @@ model Admin {
   is_active Boolean @default(true)
 
   created_at    DateTime  @default(now()) @db.Timestamptz(3)
-  updated_at    DateTime  @updatedAt      @db.Timestamptz(3)
+  updated_at    DateTime  @updatedAt @db.Timestamptz(3)
   last_login_at DateTime? @db.Timestamptz(3)
 
   user User @relation(fields: [user_id], references: [id], onDelete: Cascade)
@@ -853,7 +881,7 @@ model PlatformService {
   sort_order Int     @default(0)
 
   created_at DateTime @default(now()) @db.Timestamptz(3)
-  updated_at DateTime @updatedAt      @db.Timestamptz(3)
+  updated_at DateTime @updatedAt @db.Timestamptz(3)
 
   business_offerings BusinessServiceOffering[]
 
@@ -878,7 +906,7 @@ model BusinessServiceOffering {
   booking_count Int @default(0)
 
   created_at DateTime @default(now()) @db.Timestamptz(3)
-  updated_at DateTime @updatedAt      @db.Timestamptz(3)
+  updated_at DateTime @updatedAt @db.Timestamptz(3)
 
   business         Business        @relation(fields: [business_id], references: [id], onDelete: Cascade)
   platform_service PlatformService @relation(fields: [platform_service_id], references: [id], onDelete: Restrict)
@@ -900,7 +928,7 @@ model StaffService {
   is_available     Boolean @default(true)
 
   created_at DateTime @default(now()) @db.Timestamptz(3)
-  updated_at DateTime @updatedAt      @db.Timestamptz(3)
+  updated_at DateTime @updatedAt @db.Timestamptz(3)
 
   staff            Staff                   @relation(fields: [staff_id], references: [id], onDelete: Cascade)
   service_offering BusinessServiceOffering @relation(fields: [service_offering_id], references: [id], onDelete: Cascade)
@@ -929,33 +957,33 @@ model Booking {
   service_start_time   DateTime @db.Timestamptz(3)
   service_end_time     DateTime @db.Timestamptz(3)
 
-  scan_absolute_start  DateTime  @db.Timestamptz(3)  
-  scan_recommended_end DateTime  @db.Timestamptz(3)   
-  scan_absolute_end    DateTime  @db.Timestamptz(3)   
+  scan_absolute_start  DateTime @db.Timestamptz(3)
+  scan_recommended_end DateTime @db.Timestamptz(3)
+  scan_absolute_end    DateTime @db.Timestamptz(3)
 
-  service_start_expected DateTime  @db.Timestamptz(3)  
-  service_end_expected   DateTime  @db.Timestamptz(3)  
-  checked_in_at        DateTime? @db.Timestamptz(3)
-  service_started_at   DateTime? @db.Timestamptz(3)
-  service_completed_at DateTime? @db.Timestamptz(3)
+  service_start_expected DateTime  @db.Timestamptz(3)
+  service_end_expected   DateTime  @db.Timestamptz(3)
+  checked_in_at          DateTime? @db.Timestamptz(3)
+  service_started_at     DateTime? @db.Timestamptz(3)
+  service_completed_at   DateTime? @db.Timestamptz(3)
 
-  service_start_actual DateTime? @db.Timestamptz(3)   
-  service_end_actual   DateTime? @db.Timestamptz(3)   
-  staff_taken_time     Int?                           
+  service_start_actual DateTime? @db.Timestamptz(3)
+  service_end_actual   DateTime? @db.Timestamptz(3)
+  staff_taken_time     Int?
 
   service_done_at DateTime? @db.Timestamptz(3)
   service_done_by String?
 
   estimated_duration Int
   actual_duration    Int?
-  
+
   services Json @db.JsonB
 
   total_duration Int
 
-  service_amount Int    
-  platform_fee   Int    
-  total_amount   Int  
+  service_amount Int
+  platform_fee   Int
+  total_amount   Int
 
   payment_confirmed_at DateTime? @db.Timestamptz(3)
 
@@ -972,7 +1000,7 @@ model Booking {
   version Int @default(1)
 
   created_at DateTime @default(now()) @db.Timestamptz(3)
-  updated_at DateTime @updatedAt      @db.Timestamptz(3)
+  updated_at DateTime @updatedAt @db.Timestamptz(3)
 
   customer Customer @relation(fields: [customer_id], references: [id], onDelete: Restrict)
   business Business @relation(fields: [business_id], references: [id], onDelete: Restrict)
@@ -1010,7 +1038,7 @@ model DailyQueue {
   version Int @default(1)
 
   created_at DateTime @default(now()) @db.Timestamptz(3)
-  updated_at DateTime @updatedAt      @db.Timestamptz(3)
+  updated_at DateTime @updatedAt @db.Timestamptz(3)
 
   staff Staff @relation(fields: [staff_id], references: [id], onDelete: Cascade)
 
@@ -1040,19 +1068,19 @@ model QRCode {
   id         String @id @default(uuid())
   booking_id String @unique
 
-  qr_code_id   String @unique @db.VarChar(100)  
+  qr_code_id   String @unique @db.VarChar(100)
   qr_data      String @db.Text
   qr_image_url String @db.Text
 
-  issued_at  DateTime  @default(now()) @db.Timestamptz(3)
+  issued_at DateTime @default(now()) @db.Timestamptz(3)
 
-  qr_status  QrStatus  @default(ACTIVE)
-  is_used    Boolean   @default(false)   
-  used_at    DateTime? @db.Timestamptz(3)
+  qr_status     QrStatus  @default(ACTIVE)
+  is_used       Boolean   @default(false)
+  used_at       DateTime? @db.Timestamptz(3)
   used_by_staff String?
 
-  valid_from DateTime  @db.Timestamptz(3)   
-  expires_at DateTime  @db.Timestamptz(3)   
+  valid_from DateTime @db.Timestamptz(3)
+  expires_at DateTime @db.Timestamptz(3)
 
   created_at DateTime @default(now()) @db.Timestamptz(3)
 
@@ -1181,7 +1209,7 @@ model Review {
   staff_response_at DateTime? @db.Timestamptz(3)
 
   created_at DateTime @default(now()) @db.Timestamptz(3)
-  updated_at DateTime @updatedAt      @db.Timestamptz(3)
+  updated_at DateTime @updatedAt @db.Timestamptz(3)
 
   booking  Booking  @relation(fields: [booking_id], references: [id], onDelete: Cascade)
   customer Customer @relation(fields: [customer_id], references: [id], onDelete: Cascade)
@@ -1205,7 +1233,7 @@ model PlatformConfig {
   updated_by  String?
 
   created_at DateTime @default(now()) @db.Timestamptz(3)
-  updated_at DateTime @updatedAt      @db.Timestamptz(3)
+  updated_at DateTime @updatedAt @db.Timestamptz(3)
 
   @@index([key])
   @@map("platform_configs")
@@ -1227,7 +1255,7 @@ model PlatformRevenue {
   business_breakdown Json? @db.JsonB
 
   created_at DateTime @default(now()) @db.Timestamptz(3)
-  updated_at DateTime @updatedAt      @db.Timestamptz(3)
+  updated_at DateTime @updatedAt @db.Timestamptz(3)
 
   @@index([date])
   @@map("platform_revenue")
@@ -1240,7 +1268,7 @@ model QrScanLog {
   staff_id   String
 
   scanned_at  DateTime @default(now()) @db.Timestamptz(3)
-  scan_result String   @db.VarChar(20)   // VALID | TOO_EARLY | EXPIRED | ALREADY_USED
+  scan_result String   @db.VarChar(20) // VALID | TOO_EARLY | EXPIRED | ALREADY_USED
   scan_method String   @default("CAMERA") @db.VarChar(20)
 
   qr_code QRCode  @relation(fields: [qr_code_id], references: [id], onDelete: Cascade)
@@ -1252,14 +1280,15 @@ model QrScanLog {
   @@index([qr_code_id])
   @@map("qr_scan_logs")
 }
+
 model IdempotencyKey {
   id           String @id @default(uuid())
   key          String @unique @db.VarChar(100)
-  request_hash String @db.VarChar(64)    
-  response     Json   @db.JsonB          
+  request_hash String @db.VarChar(64)
+  response     Json   @db.JsonB
 
   created_at DateTime @default(now()) @db.Timestamptz(3)
-  expires_at DateTime @db.Timestamptz(3) 
+  expires_at DateTime @db.Timestamptz(3)
 
   @@index([key])
   @@index([expires_at])
