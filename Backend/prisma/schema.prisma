@@ -150,6 +150,8 @@ enum BusinessNotificationType {
   CUSTOMER_NO_SHOW
   HOLIDAY_CREATED
   REVIEW_RECEIVED
+  STAFF_INVITE_EXPIRED
+  STAFF_INVITE_RESENT
 }
 
 enum StaffNotificationType {
