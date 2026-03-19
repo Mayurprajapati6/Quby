@@ -7,6 +7,7 @@ datasource db {
   provider = "postgresql"
 }
 
+
 enum UserRole {
   CUSTOMER
   STAFF
@@ -486,6 +487,7 @@ model Business {
   is_active Boolean @default(true)
 
   break_time_minutes Int @default(5)
+  cancellation_window_hours Int @default(2)
 
   average_rating Float? @default(0)
   total_reviews  Int    @default(0)
@@ -992,6 +994,8 @@ model Booking {
   transaction Transaction?
 
   status BookingStatus @default(PENDING_PAYMENT)
+
+  cancellable_until   DateTime? @db.Timestamptz(3)
 
   cancelled_at        DateTime? @db.Timestamptz(3)
   cancelled_by        String?
