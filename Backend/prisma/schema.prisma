@@ -1108,7 +1108,7 @@ model Transaction {
   business_id String
   staff_id    String
 
-  razorpay_order_id   String  @unique @db.VarChar(100)
+  razorpay_order_id   String? @unique @db.VarChar(100)
   razorpay_payment_id String? @unique @db.VarChar(100)
   razorpay_signature  String? @db.VarChar(500)
 
@@ -1274,7 +1274,7 @@ model QrScanLog {
   staff_id   String
 
   scanned_at  DateTime @default(now()) @db.Timestamptz(3)
-  scan_result String   @db.VarChar(20) // VALID | TOO_EARLY | EXPIRED | ALREADY_USED
+  scan_result String   @db.VarChar(20) 
   scan_method String   @default("CAMERA") @db.VarChar(20)
 
   qr_code QRCode  @relation(fields: [qr_code_id], references: [id], onDelete: Cascade)
