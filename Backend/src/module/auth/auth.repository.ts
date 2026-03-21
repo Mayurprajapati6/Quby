@@ -1,24 +1,20 @@
-// ─────────────────────────────────────────────────────────────────────────────
-// MODULE: auth
-// FILE:   auth.repository.ts
-// CHANGE: Added findBusinessByAuthUserId, createBusinessAuthUser
-// ─────────────────────────────────────────────────────────────────────────────
-
-import { prisma } from '../../config/prisma';
-import {
+import { prisma } from "../../config/prisma";
+import { hashPassword } from "../../utils/helpers/crypto";
+import type {
   CreateCustomerProfileDTO,
   CreateOwnerProfileDTO,
   SaveRefreshTokenDTO,
   CreatePasswordResetTokenDTO,
   CreateStaffSetupTokenDTO,
-} from './auth.types';
+  CreateBusinessAuthUserDTO,
+} from "./auth.types";
 
 export class AuthRepository {
 
   static async createUser(
     email:        string,
     passwordHash: string,
-    role:         'CUSTOMER' | 'OWNER' | 'BUSINESS'
+    role:         "CUSTOMER" | "OWNER" | "BUSINESS" | "ADMIN",
   ) {
     return prisma.user.create({
       data: { email, password_hash: passwordHash, role },
@@ -40,6 +36,13 @@ export class AuthRepository {
     });
   }
 
+  static async setFirstLoginAtIfNull(customerId: string) {
+    return prisma.customer.updateMany({
+      where: { id: customerId, first_login_at: null },
+      data:  { first_login_at: new Date() },
+    });
+  }
+
   static async incrementUserVersion(userId: string) {
     return prisma.user.update({
       where: { id: userId },
@@ -58,21 +61,36 @@ export class AuthRepository {
     return prisma.user.delete({ where: { id: userId } });
   }
 
+  static async isUserSuspended(userId: string): Promise<boolean> {
+    const user = await prisma.user.findUnique({
+      where:  { id: userId },
+      select: { is_suspended: true },
+    });
+    return user?.is_suspended ?? false;
+  }
+
+  static async checkUsernameExists(username: string): Promise<boolean> {
+    const count = await prisma.customer.count({ where: { username } });
+    return count > 0;
+  }
+
   static async createCustomerProfile(data: CreateCustomerProfileDTO) {
     return prisma.customer.create({
       data: {
-        user_id: data.userId,
-        name:    data.name,
-        city:    data.city,
-        state:   data.state,
-        phone:   data.phone,
+        user_id:    data.userId,
+        username:   data.username,    
+        name:       data.name,
+        city:       data.city,
+        state:      data.state,
+        phone:      data.phone,
+        avatar_url: data.avatarUrl ?? null,
       },
     });
   }
 
   static async createCustomerWallet(customerId: string) {
     return prisma.customerWallet.create({
-      data: { customer_id: customerId, balance: 0, currency: 'INR' },
+      data: { customer_id: customerId, balance: 0, currency: "INR" },
     });
   }
 
@@ -96,13 +114,6 @@ export class AuthRepository {
     return prisma.owner.findUnique({ where: { user_id: userId } });
   }
 
-  static async findStaffByEmail(email: string) {
-    return prisma.staff.findFirst({
-      where:   { email },
-      include: { user: true },
-    });
-  }
-
   static async findStaffByUserId(userId: string) {
     return prisma.staff.findUnique({ where: { user_id: userId } });
   }
@@ -121,7 +132,36 @@ export class AuthRepository {
   static async findBusinessByAuthUserId(userId: string) {
     return prisma.business.findUnique({
       where:  { auth_user_id: userId },
-      select: { id: true, business_name: true, is_active: true, is_verified: true },
+      select: {
+        id:            true,
+        business_name: true,
+        is_active:     true,
+        owner: {
+          select: {
+            user: { select: { is_suspended: true } },
+          },
+        },
+      },
+    });
+  }
+
+  static async createBusinessAuthUser(data: CreateBusinessAuthUserDTO) {
+    const passwordHash = await hashPassword(data.password);
+    return prisma.user.create({
+      data: {
+        email:         data.email,
+        password_hash: passwordHash,
+        role:          "BUSINESS",
+        is_active:     true,
+        is_verified:   true,   
+      },
+    });
+  }
+
+  static async linkAuthUserToBusiness(businessId: string, authUserId: string) {
+    return prisma.business.update({
+      where: { id: businessId },
+      data:  { auth_user_id: authUserId },
     });
   }
 
@@ -187,7 +227,6 @@ export class AuthRepository {
         is_used:    false,
         expires_at: { gt: new Date() },
       },
-      include: { user: true },
     });
   }
 

@@ -1,236 +1,92 @@
 import { Request, Response, NextFunction } from "express";
-import { StatusCodes } from "http-status-codes";
 import { AuthService } from "./auth.service";
 import { successResponse } from "../../utils/helpers/response";
-import { AUTH_MESSAGES } from "../../constants/messages";
-import { AuthRequest } from "../../middlewares/types";
-
-const COOKIE_OPTIONS = {
-  httpOnly: true,
-  secure: process.env.NODE_ENV === "production",
-  sameSite: "strict" as const,
-  maxAge: 7 * 24 * 60 * 60 * 1000, // 7 days
-};
-
-function extractMeta(req: Request) {
-  return {
-    ipAddress:
-      (req.headers["x-forwarded-for"] as string)?.split(",")[0]?.trim() ??
-      req.ip,
-    userAgent: req.headers["user-agent"],
-  };
-}
+import type { AuthRequest } from "../../middlewares/types";
+import {
+  registerSchema,
+  loginSchema,
+  forgotPasswordSchema,
+  resetPasswordSchema,
+  refreshTokenSchema,
+  changePasswordSchema,
+  staffSetupSchema,
+  deleteAccountSchema,
+} from "./auth.validator";
 
 export class AuthController {
 
-  static signup = async (
-    req: Request,
-    res: Response,
-    next: NextFunction
-  ): Promise<void> => {
+  static async register(req: Request, res: Response, next: NextFunction) {
     try {
-      const result = await AuthService.signup(req.body);
+      const dto    = registerSchema.parse(req.body);
+      const result = await AuthService.signup(dto);
+      res.status(201).json(successResponse(result, "Account created successfully."));
+    } catch (err) { next(err); }
+  }
 
-      res.cookie("refreshToken", result.refreshToken, COOKIE_OPTIONS);
-
-      res.status(StatusCodes.CREATED).json(
-        successResponse(
-          { accessToken: result.accessToken, user: result.user },
-          AUTH_MESSAGES.REGISTRATION_SUCCESS
-        )
-      );
-    } catch (err) {
-      next(err);
-    }
-  };
-
-  static login = async (
-    req: Request,
-    res: Response,
-    next: NextFunction
-  ): Promise<void> => {
+  static async login(req: Request, res: Response, next: NextFunction) {
     try {
-      const result = await AuthService.login(req.body, extractMeta(req));
+      const dto    = loginSchema.parse(req.body);
+      const meta   = { ipAddress: req.ip, userAgent: req.headers["user-agent"] };
+      const result = await AuthService.login(dto, meta);
+      res.json(successResponse(result));
+    } catch (err) { next(err); }
+  }
 
-      res.cookie("refreshToken", result.refreshToken, COOKIE_OPTIONS);
-
-      res.status(StatusCodes.OK).json(
-        successResponse(
-          { accessToken: result.accessToken, user: result.user },
-          AUTH_MESSAGES.LOGIN_SUCCESS
-        )
-      );
-    } catch (err) {
-      next(err);
-    }
-  };
-
-  static staffSetup = async (
-    req: Request,
-    res: Response,
-    next: NextFunction
-  ): Promise<void> => {
+  static async refresh(req: Request, res: Response, next: NextFunction) {
     try {
-      const result = await AuthService.staffSetup(req.body, extractMeta(req));
+      const { refresh_token } = refreshTokenSchema.parse(req.body);
+      const meta   = { ipAddress: req.ip, userAgent: req.headers["user-agent"] };
+      const tokens = await AuthService.refreshAccessToken(refresh_token, meta);
+      res.json(successResponse(tokens));
+    } catch (err) { next(err); }
+  }
 
-      res.cookie("refreshToken", result.refreshToken, COOKIE_OPTIONS);
-
-      res.status(StatusCodes.CREATED).json(
-        successResponse(
-          { accessToken: result.accessToken, user: result.user },
-          "Account setup successful. Welcome aboard!"
-        )
-      );
-    } catch (err) {
-      next(err);
-    }
-  };
-
-  static forgotPassword = async (
-    req: Request,
-    res: Response,
-    next: NextFunction
-  ): Promise<void> => {
+  static async logout(req: Request, res: Response, next: NextFunction) {
     try {
-      await AuthService.forgotPassword(req.body);
+      const { refresh_token } = req.body;
+      if (refresh_token) await AuthService.logout(refresh_token);
+      res.json(successResponse(null, "Logged out successfully."));
+    } catch (err) { next(err); }
+  }
 
-      res.status(StatusCodes.OK).json(
-        successResponse(
-          null,
-          "If an account with this email exists, you will receive a password reset link shortly."
-        )
-      );
-    } catch (err) {
-      next(err);
-    }
-  };
-
-  static resetPassword = async (
-    req: Request,
-    res: Response,
-    next: NextFunction
-  ): Promise<void> => {
+  static async forgotPassword(req: Request, res: Response, next: NextFunction) {
     try {
-      await AuthService.resetPassword(req.body);
+      const { email } = forgotPasswordSchema.parse(req.body);
+      await AuthService.forgotPassword({ email });
+      res.json(successResponse(null, "If that email is registered, a reset link has been sent."));
+    } catch (err) { next(err); }
+  }
 
-      res.status(StatusCodes.OK).json(
-        successResponse(
-          null,
-          "Password reset successfully. Please login with your new password."
-        )
-      );
-    } catch (err) {
-      next(err);
-    }
-  };
-
-  static changePassword = async (
-    req: AuthRequest,
-    res: Response,
-    next: NextFunction
-  ): Promise<void> => {
+  static async resetPassword(req: Request, res: Response, next: NextFunction) {
     try {
-      await AuthService.changePassword(req.user!.userId, req.body);
+      const dto = resetPasswordSchema.parse(req.body);
+      await AuthService.resetPassword(dto);
+      res.json(successResponse(null, "Password reset successfully. Please log in."));
+    } catch (err) { next(err); }
+  }
 
-      res.clearCookie("refreshToken");
-
-      res.status(StatusCodes.OK).json(
-        successResponse(
-          null,
-          "Password changed successfully. Please login again on all devices."
-        )
-      );
-    } catch (err) {
-      next(err);
-    }
-  };
-
-  static refresh = async (
-    req: Request,
-    res: Response,
-    next: NextFunction
-  ): Promise<void> => {
+  static async staffSetup(req: Request, res: Response, next: NextFunction) {
     try {
-      const refreshToken = req.cookies?.refreshToken;
+      const dto    = staffSetupSchema.parse(req.body);
+      const meta   = { ipAddress: req.ip, userAgent: req.headers["user-agent"] };
+      const result = await AuthService.staffSetup(dto, meta);
+      res.json(successResponse(result, "Account setup complete. Welcome!"));
+    } catch (err) { next(err); }
+  }
 
-      if (!refreshToken) {
-        res.status(StatusCodes.UNAUTHORIZED).json({
-          success: false,
-          message: AUTH_MESSAGES.UNAUTHORIZED,
-        });
-        return;
-      }
-
-      const result = await AuthService.refreshAccessToken(
-        refreshToken,
-        extractMeta(req)
-      );
-
-      res.cookie("refreshToken", result.refreshToken, COOKIE_OPTIONS);
-
-      res.status(StatusCodes.OK).json(
-        successResponse({ accessToken: result.accessToken })
-      );
-    } catch (err) {
-      next(err);
-    }
-  };
-
-  static logout = async (
-    req: Request,
-    res: Response,
-    next: NextFunction
-  ): Promise<void> => {
+  static async changePassword(req: AuthRequest, res: Response, next: NextFunction) {
     try {
-      const refreshToken = req.cookies?.refreshToken;
+      const dto = changePasswordSchema.parse(req.body);
+      await AuthService.changePassword(req.user!.userId, dto);
+      res.json(successResponse(null, "Password changed successfully."));
+    } catch (err) { next(err); }
+  }
 
-      if (refreshToken) {
-        await AuthService.logout(refreshToken);
-      }
-
-      res.clearCookie("refreshToken");
-
-      res.status(StatusCodes.OK).json(
-        successResponse(null, AUTH_MESSAGES.LOGOUT_SUCCESS)
-      );
-    } catch (err) {
-      next(err);
-    }
-  };
-
-  static logoutAll = async (
-    req: AuthRequest,
-    res: Response,
-    next: NextFunction
-  ): Promise<void> => {
+  static async deleteAccount(req: AuthRequest, res: Response, next: NextFunction) {
     try {
-      await AuthService.logoutAllDevices(req.user!.userId);
-
-      res.clearCookie("refreshToken");
-
-      res.status(StatusCodes.OK).json(
-        successResponse(null, "Logged out from all devices successfully.")
-      );
-    } catch (err) {
-      next(err);
-    }
-  };
-
-  static deleteAccount = async (
-    req: AuthRequest,
-    res: Response,
-    next: NextFunction
-  ): Promise<void> => {
-    try {
-      await AuthService.deleteAccount(req.user!.userId, req.body.password);
-
-      res.clearCookie("refreshToken");
-
-      res.status(StatusCodes.OK).json(
-        successResponse(null, "Account permanently deleted.")
-      );
-    } catch (err) {
-      next(err);
-    }
-  };
+      const { password } = deleteAccountSchema.parse(req.body);
+      await AuthService.deleteAccount(req.user!.userId, password);
+      res.json(successResponse(null, "Account deleted successfully."));
+    } catch (err) { next(err); }
+  }
 }
