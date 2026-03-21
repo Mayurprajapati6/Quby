@@ -1,75 +1,77 @@
-import express from "express";
+import { Router } from "express";
 import { AuthController } from "./auth.controller";
-import { validateRequestBody } from "../../validators";
-import {
-  signupSchema,
-  loginSchema,
-  staffSetupSchema,
-  forgotPasswordSchema,
-  resetPasswordSchema,
-  changePasswordSchema,
-  deleteAccountSchema,
-} from "../../validators/auth.validator";
 import { authenticate } from "../../middlewares/auth.middleware";
 import {
   loginLimiter,
   registerLimiter,
   passwordResetLimiter,
 } from "../../middlewares/rateLimiter.middleware";
+import { validateRequestBody } from "../../validators";
+import {
+  registerSchema,
+  loginSchema,
+  forgotPasswordSchema,
+  resetPasswordSchema,
+  refreshTokenSchema,
+  staffSetupSchema,
+  changePasswordSchema,
+  deleteAccountSchema,
+} from "../../validators/auth.validator";
 
-const router = express.Router();
+export const authRouter = Router();
 
-router.post(
-  "/signup",
+authRouter.post(
+  "/register",
   registerLimiter,
-  validateRequestBody(signupSchema),
-  AuthController.signup
+  validateRequestBody(registerSchema),
+  AuthController.register,
 );
 
-router.post(
+authRouter.post(
   "/login",
   loginLimiter,
   validateRequestBody(loginSchema),
-  AuthController.login
+  AuthController.login,
 );
 
-router.post(
-  "/staff/setup",
-  validateRequestBody(staffSetupSchema),
-  AuthController.staffSetup
+authRouter.post(
+  "/refresh",
+  validateRequestBody(refreshTokenSchema),
+  AuthController.refresh,
 );
 
-router.post(
+authRouter.post("/logout", AuthController.logout);
+
+authRouter.post(
   "/forgot-password",
   passwordResetLimiter,
   validateRequestBody(forgotPasswordSchema),
-  AuthController.forgotPassword
+  AuthController.forgotPassword,
 );
 
-router.post(
+authRouter.post(
   "/reset-password",
+  passwordResetLimiter,
   validateRequestBody(resetPasswordSchema),
-  AuthController.resetPassword
+  AuthController.resetPassword,
 );
 
-router.post("/refresh", AuthController.refresh);
+authRouter.post(
+  "/staff-setup",
+  validateRequestBody(staffSetupSchema),
+  AuthController.staffSetup,
+);
 
-router.post("/logout", AuthController.logout);
-
-router.post(
+authRouter.patch(
   "/change-password",
   authenticate,
   validateRequestBody(changePasswordSchema),
-  AuthController.changePassword
+  AuthController.changePassword,
 );
 
-router.post("/logout-all", authenticate, AuthController.logoutAll);
-
-router.delete(
+authRouter.delete(
   "/account",
   authenticate,
   validateRequestBody(deleteAccountSchema),
-  AuthController.deleteAccount
+  AuthController.deleteAccount,
 );
-
-export default router;

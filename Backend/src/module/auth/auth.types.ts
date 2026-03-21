@@ -1,18 +1,20 @@
 export interface JwtPayload {
   userId:      string;
-  role:        'CUSTOMER' | 'STAFF' | 'OWNER' | 'ADMIN' | 'BUSINESS';
+  role:        "CUSTOMER" | "STAFF" | "OWNER" | "ADMIN" | "BUSINESS";
   version:     number;
+  entityId?:   string;
   businessId?: string;
 }
 
 export interface UserSignupDTO {
-  name:     string;
-  email:    string;
-  password: string;
-  city:     string;
-  state:    string;
-  phone?:   string;
-  role:     'CUSTOMER' | 'OWNER';
+  username?: string;   
+  name:      string;
+  email:     string;
+  password:  string;
+  city:      string;
+  state:     string;
+  phone?:    string;
+  role:      "CUSTOMER" | "OWNER";
 }
 
 export interface LoginDTO {
@@ -42,13 +44,15 @@ export interface ChangePasswordDTO {
 export interface DeleteAccountDTO {
   password: string;
 }
+
 export interface MinimalUserInfo {
   id:          string;
   email:       string;
   name:        string;
-  role:        'CUSTOMER' | 'STAFF' | 'OWNER' | 'ADMIN' | 'BUSINESS';
-  businessId?: string;  
+  role:        "CUSTOMER" | "STAFF" | "OWNER" | "ADMIN" | "BUSINESS";
+  businessId?: string;
 }
+
 export interface TokenResult {
   accessToken:  string;
   refreshToken: string;
@@ -56,11 +60,13 @@ export interface TokenResult {
 }
 
 export interface CreateCustomerProfileDTO {
-  userId: string;
-  name:   string;
-  city:   string;
-  state:  string;
-  phone?: string;
+  userId:     string;
+  username:   string;
+  name:       string;
+  city:       string;
+  state:      string;
+  phone?:     string;
+  avatarUrl?: string;
 }
 
 export interface CreateOwnerProfileDTO {
@@ -69,6 +75,7 @@ export interface CreateOwnerProfileDTO {
   city:   string;
   state:  string;
   phone:  string;
+  avatar_url?: string;
 }
 
 export interface SaveRefreshTokenDTO {
@@ -89,4 +96,10 @@ export interface CreateStaffSetupTokenDTO {
   userId:    string;
   token:     string;
   expiresAt: Date;
+}
+
+export interface CreateBusinessAuthUserDTO {
+  email:        string;
+  password:     string;
+  businessName: string;
 }
