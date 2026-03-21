@@ -16,3 +16,4 @@ export const authorizeRoles = (...roles: Array<JwtPayload['role']>) => {
     next();
   };
 };
+export const requireRole = authorizeRoles;

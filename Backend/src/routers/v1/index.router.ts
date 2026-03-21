@@ -1,23 +1,54 @@
-import express from 'express';
-import pingRouter from './ping.router';
-import authRouter from '../../module/auth/auth.routes';
-import customerRouter from '../../module/customer/customer.routes';
-import ownerRouter from '../../module/owner/owner.routes';
-import adminRouter from '../../module/admin/admin.routes';
-import staffRouter from '../../module/staff/staff.routes';
+import { Router } from "express";
+import {
+  globalLimiter,
+  loginLimiter,
+  registerLimiter,
+  passwordResetLimiter,
+  exploreLimiter,
+} from "../../middlewares/rateLimiter.middleware";
 
-const v1Router = express.Router();
+import { authRouter } from "../../module/auth/auth.routes";
+import { customerRouter } from "../../module/customer/customer.routes";
+import { explorePublicRouter } from "../../module/customer/explore/explore.public.routes";
+import { businessDetailPublicRouter } from "../../module/customer/business-detail/business-detail.public.routes";
+import { ownerRouter } from "../../module/owner/owner.routes";
+import { businessRouter } from "../../module/business/business.routes";
+import { staffRouter } from "../../module/staff/staff.routes";
+import { adminRouter } from "../../module/admin/admin.routes";
+import { paymentRouter } from "../../module/payment/payment.routes";
 
-v1Router.use('/ping',  pingRouter);
+const v1Router = Router();
+v1Router.use(globalLimiter);
 
-v1Router.use('/auth', authRouter);
+v1Router.use("/auth/login",           loginLimiter);
+v1Router.use("/auth/register",        registerLimiter);
+v1Router.use("/auth/forgot-password", passwordResetLimiter);
+v1Router.use("/auth/reset-password",  passwordResetLimiter);
+v1Router.use("/auth", authRouter);
 
-v1Router.use('/customer', customerRouter);
+//  Public routes  
+v1Router.use("/explore",    exploreLimiter, explorePublicRouter);         
+v1Router.use("/businesses", exploreLimiter, businessDetailPublicRouter);  
 
-v1Router.use('/owner', ownerRouter);
+// Role-protected modules 
+v1Router.use("/customer", customerRouter);
+v1Router.use("/owner",    ownerRouter);
+v1Router.use("/business", businessRouter);
+v1Router.use("/staff",    staffRouter);
+v1Router.use("/admin",    adminRouter);
+v1Router.use("/payment",  paymentRouter);
 
-v1Router.use('/admin', adminRouter);
-
-v1Router.use('/staff', staffRouter); 
+// Health check 
+v1Router.get("/health", (_req, res) => {
+  res.json({
+    success: true,
+    data: {
+      status:    "ok",
+      version:   "v1",
+      timestamp: new Date().toISOString(),
+      uptime:    process.uptime(),
+    },
+  });
+});
 
 export default v1Router;

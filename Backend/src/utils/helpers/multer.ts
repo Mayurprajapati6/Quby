@@ -1,8 +1,9 @@
 import multer from "multer";
 import { BadRequestError } from "../errors/app.error";
+import { Request, Response, NextFunction } from "express";
 
 const ALLOWED_MIMETYPES   = ["image/jpeg", "image/png", "image/webp"];
-const MAX_FILE_SIZE_BYTES  = 5 * 1024 * 1024; // 5MB per file
+const MAX_FILE_SIZE_BYTES  = 5 * 1024 * 1024; 
 
 const storage = multer.memoryStorage();
 
@@ -18,22 +19,33 @@ function fileFilter(
   }
 }
 
-export const uploadSingle = multer({
-  storage,
-  fileFilter,
-  limits: { fileSize: MAX_FILE_SIZE_BYTES },
-}).single("image");
+const baseConfig = { storage, fileFilter, limits: { fileSize: MAX_FILE_SIZE_BYTES } };
+
+function uploadSingleFactory(fieldName?: string): any {
+  return multer({ ...baseConfig }).single(fieldName ?? "image");
+}
+
+export const uploadSingle = new Proxy(uploadSingleFactory, {
+  apply(target, thisArg, args: any[]) {
+    if (args.length === 1 && typeof args[0] === "string") {
+      return target(args[0]);
+    }
+    return target("image")(args[0], args[1], args[2]);
+  },
+}) as any;
 
 export const uploadMultiple = multer({
-  storage,
-  fileFilter,
-  limits: {
-    fileSize: MAX_FILE_SIZE_BYTES,
-    files:    10,
-  },
+  ...baseConfig,
+  limits: { fileSize: MAX_FILE_SIZE_BYTES, files: 10 },
 }).array("images", 10);
 
-import { Request, Response, NextFunction } from "express";
+export const uploadFields = (
+  fields: Array<{ name: string; maxCount: number }>
+) =>
+  multer({ ...baseConfig }).fields(fields);
+
+export const uploadArray = (fieldName: string, maxCount: number) =>
+  multer({ ...baseConfig, limits: { fileSize: MAX_FILE_SIZE_BYTES, files: maxCount } }).array(fieldName, maxCount);
 
 export function handleMulterError(
   err: any,

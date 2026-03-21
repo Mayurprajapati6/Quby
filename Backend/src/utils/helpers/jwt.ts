@@ -3,13 +3,11 @@ import { serverConfig } from "../../config";
 import { JwtPayload } from "../../module/auth/auth.types";
 import { UnauthorizedError } from "../errors/app.error";
 
-const ACCESS_SECRET = serverConfig.JWT_SECRET!;
+const ACCESS_SECRET  = serverConfig.JWT_SECRET!;
 const REFRESH_SECRET = serverConfig.JWT_REFRESH_SECRET!;
 
-const ACCESS_EXPIRES_IN =
-  serverConfig.JWT_ACCESS_SECRET_EXPIRES_IN as SignOptions["expiresIn"];
-const REFRESH_EXPIRES_IN =
-  serverConfig.JWT_REFRESH_SECRET_EXPIRES_IN as SignOptions["expiresIn"];
+const ACCESS_EXPIRES_IN  = serverConfig.JWT_ACCESS_SECRET_EXPIRES_IN  as SignOptions["expiresIn"];
+const REFRESH_EXPIRES_IN = serverConfig.JWT_REFRESH_SECRET_EXPIRES_IN as SignOptions["expiresIn"];
 
 export function signAccessToken(payload: JwtPayload): string {
   return jwt.sign(payload, ACCESS_SECRET, { expiresIn: ACCESS_EXPIRES_IN });
@@ -42,9 +40,10 @@ function verify(token: string, secret: string): JwtPayload {
     }
 
     return {
-      userId: payload.userId,
-      role: payload.role,
-      version: payload.version,
+      userId:     payload.userId,
+      role:       payload.role,
+      version:    payload.version,
+      ...(payload.businessId && { businessId: payload.businessId }),
     };
   } catch (err) {
     if (err instanceof UnauthorizedError) throw err;

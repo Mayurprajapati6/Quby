@@ -9,16 +9,20 @@ cloudinary.config({
 });
 
 export const CLOUDINARY_FOLDERS = {
+  LOGOS:      "logos",
+  COVERS:     "covers",
   PROFILES:   "profiles",
   BUSINESSES: "businesses",
   SERVICES:   "services",
   REVIEWS:    "reviews",
+  QR_CODES:   "qr-codes",
 } as const;
 
 export type CloudinaryFolder = keyof typeof CLOUDINARY_FOLDERS;
 
 const MAX_FILE_SIZE_BYTES = 5 * 1024 * 1024; // 5MB
 const ALLOWED_MIMETYPES   = ["image/jpeg", "image/png", "image/webp"];
+
 export interface UploadResult {
   secure_url:    string;
   public_id:     string;
@@ -29,6 +33,7 @@ export interface UploadResult {
   thumbnail_url: string | undefined;
   medium_url:    string | undefined;
 }
+
 export interface BulkDeleteResult {
   success: string[];
   failed:  string[];
@@ -64,8 +69,8 @@ export async function uploadImageBuffer(
           { fetch_format: "auto" },
         ],
         eager: [
-          { width: 400, height: 300, crop: "fill", quality: "auto:good" }, // thumbnail
-          { width: 800, height: 600, crop: "fill", quality: "auto:good" }, // medium
+          { width: 400, height: 300, crop: "fill", quality: "auto:good" },
+          { width: 800, height: 600, crop: "fill", quality: "auto:good" },
         ],
         eager_async: true,
       },
@@ -90,6 +95,42 @@ export async function uploadImageBuffer(
   });
 }
 
+export async function uploadRawBuffer(
+  buffer:   Buffer,
+  mimetype: string,
+  folder:   CloudinaryFolder = "QR_CODES"
+): Promise<UploadResult> {
+  if (buffer.length > MAX_FILE_SIZE_BYTES) {
+    throw new BadRequestError(`Image size exceeds the ${MAX_FILE_SIZE_BYTES / (1024 * 1024)}MB limit.`);
+  }
+
+  return new Promise((resolve, reject) => {
+    const uploadStream = cloudinary.uploader.upload_stream(
+      {
+        folder:        CLOUDINARY_FOLDERS[folder],
+        resource_type: "image",
+      },
+      (error, result) => {
+        if (error || !result) {
+          return reject(new BadRequestError(`Upload failed: ${error?.message ?? "Unknown error"}`));
+        }
+        resolve({
+          secure_url:    result.secure_url,
+          public_id:     result.public_id,
+          format:        result.format,
+          width:         result.width,
+          height:        result.height,
+          bytes:         result.bytes,
+          thumbnail_url: result.eager?.[0]?.secure_url,
+          medium_url:    result.eager?.[1]?.secure_url,
+        });
+      }
+    );
+
+    uploadStream.end(buffer);
+  });
+}
+
 export async function uploadMultipleImageBuffers(
   files: Express.Multer.File[],
   folder: CloudinaryFolder = "BUSINESSES"
@@ -103,7 +144,7 @@ export async function deleteFromCloudinary(publicId: string): Promise<boolean> {
   try {
     const result = await cloudinary.uploader.destroy(publicId);
     if (result.result === "ok")        return true;
-    if (result.result === "not found") return true; 
+    if (result.result === "not found") return true;
     console.error(`[Cloudinary] Delete failed for ${publicId}:`, result);
     return false;
   } catch (error: any) {

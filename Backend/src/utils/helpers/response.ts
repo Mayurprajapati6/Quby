@@ -39,7 +39,7 @@ export function paginatedResponse<T>(
   data: T[],
   total: number,
   page: number,
-  limit: number
+  limit: number,
 ): PaginatedResponse<T> {
   return {
     success: true,
