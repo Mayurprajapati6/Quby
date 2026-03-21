@@ -1,54 +1,48 @@
-import Redis from 'ioredis';
-import { serverConfig } from './index';
-import logger from './logger.config';
+import IORedis from "ioredis";
+import { serverConfig } from "./index";
+import logger from "./logger.config";
 
-const redisOptions = {
-    host:                 serverConfig.REDIS_HOST ?? 'localhost',
-    port:                 serverConfig.REDIS_PORT ?? 6379,
-    maxRetriesPerRequest: null,       
-    enableReadyCheck:     true,
-    lazyConnect:          false,
-    keepAlive:            30_000,
-    connectTimeout:       10_000,
-    retryStrategy(times: number) {
-        if (times > 10) {
-            logger.error('[Redis] Max retry attempts reached. Giving up.');
-            return null;
-        }
-        const delay = Math.min(times * 200, 3_000);
-        logger.warn(`[Redis] Reconnecting in ${delay}ms (attempt ${times})...`);
-        return delay;
+function createRedisClient(name: string): IORedis {
+  const client = new IORedis({
+    host:               serverConfig.REDIS_HOST ?? "127.0.0.1",
+    port:               Number(serverConfig.REDIS_PORT ?? 6379),
+    password:           serverConfig.REDIS_PASSWORD || undefined,
+    db:                 Number(serverConfig.REDIS_DB ?? 0),
+    maxRetriesPerRequest: null,        
+    enableReadyCheck:   false,         
+    lazyConnect:        true,          
+    retryStrategy(times) {
+      if (times > 10) {
+        logger.error(`[Redis:${name}] Max retries reached — giving up`);
+        return null;                   
+      }
+      const delay = Math.min(times * 200, 3000);
+      logger.warn(`[Redis:${name}] Retrying in ${delay}ms (attempt ${times})`);
+      return delay;
     },
-};
+  });
 
-export const redisClient = new Redis(redisOptions);
+  client.on("connect",   () => logger.info(`[Redis:${name}] Connected`));
+  client.on("ready",     () => logger.info(`[Redis:${name}] Ready`));
+  client.on("error",     (err) => logger.error(`[Redis:${name}] Error:`, err.message));
+  client.on("close",     () => logger.warn(`[Redis:${name}] Connection closed`));
+  client.on("reconnecting", () => logger.info(`[Redis:${name}] Reconnecting...`));
 
-export const redisPub = new Redis(redisOptions);
-export const redisSub = new Redis(redisOptions);
-
-redisClient.on('connect',      () => logger.info('[Redis] Client connected'));
-redisClient.on('ready',        () => logger.info('[Redis] Client ready'));
-redisClient.on('error',        (err) => logger.error('[Redis] Client error:', err.message));
-redisClient.on('close',        () => logger.warn('[Redis] Client connection closed'));
-redisClient.on('reconnecting', () => logger.warn('[Redis] Client reconnecting...'));
-
-redisPub.on('error', (err) => logger.error('[Redis Pub] Error:', err.message));
-redisSub.on('error', (err) => logger.error('[Redis Sub] Error:', err.message));
-
-export async function checkRedisHealth(): Promise<boolean> {
-    try {
-        const pong = await redisClient.ping();
-        return pong === 'PONG';
-    } catch {
-        return false;
-    }
+  return client;
 }
 
+export const redisClient = createRedisClient("main");
+
+export const redisPub = createRedisClient("pub");
+
+export const redisSub = createRedisClient("sub");
+
 export async function closeRedisConnections(): Promise<void> {
-    await Promise.all([
-        redisClient.quit(),
-        redisPub.quit(),
-        redisSub.quit(),
-    ]);
-    logger.info('[Redis] All connections closed');
+  logger.info("[Redis] Closing all connections...");
+  await Promise.allSettled([
+    redisClient.quit(),
+    redisPub.quit(),
+    redisSub.quit(),
+  ]);
+  logger.info("[Redis] All connections closed.");
 }

@@ -1,0 +1,58 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8"/>
+  <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+  <title>Business Account Suspended</title>
+  <style>
+    @import url('https://fonts.googleapis.com/css2?family=Playfair+Display:wght@400;600;700&family=DM+Sans:wght@300;400;500&display=swap');
+    *{margin:0;padding:0;box-sizing:border-box}
+    body{background:#0f0f0f;font-family:'DM Sans',sans-serif;color:#e8e0d5;-webkit-font-smoothing:antialiased}
+    .wrapper{max-width:600px;margin:0 auto;padding:40px 20px}
+    .header{text-align:center;padding:40px 40px 32px;background:linear-gradient(160deg,#1a1410 0%,#0f0f0f 100%);border-top:3px solid #c9a96e;border-radius:12px 12px 0 0}
+    .logo-mark{display:inline-block;width:48px;height:48px;background:#c9a96e;border-radius:10px;line-height:48px;font-family:'Playfair Display',serif;font-size:24px;font-weight:700;color:#0f0f0f;margin-bottom:16px}
+    .brand-name{font-family:'Playfair Display',serif;font-size:22px;font-weight:600;color:#c9a96e;letter-spacing:2px;text-transform:uppercase}
+    .brand-tagline{font-size:12px;color:#6b6057;letter-spacing:1px;margin-top:4px}
+    .card{background:#161410;border:1px solid #2a2420;border-top:none;padding:40px}
+    .footer{background:#0c0c0c;border:1px solid #2a2420;border-top:none;border-radius:0 0 12px 12px;padding:24px 40px;text-align:center}
+    .footer p{font-size:11px;color:#3d3530;line-height:1.8}
+    .footer a{color:#6b5d4e;text-decoration:none}
+    .icon-circle{width:64px;height:64px;border-radius:50%;background:#2e1010;border:1px solid #4d2020;display:flex;align-items:center;justify-content:center;margin:0 auto 20px;font-size:28px}
+    .section-label{font-size:10px;color:#c9a96e;letter-spacing:2px;text-transform:uppercase;margin-bottom:12px}
+    .headline{font-family:'Playfair Display',serif;font-size:28px;font-weight:700;color:#f0e8dc;line-height:1.25;margin-bottom:8px;text-align:center}
+    .sub{font-size:13px;color:#6b6057;text-align:center;margin-bottom:28px;letter-spacing:0.5px}
+    .body-text{font-size:15px;color:#a09080;line-height:1.75;margin-bottom:16px}
+    .reason-block{background:#2e1010;border:1px solid #4d2020;border-left:3px solid #e85d04;border-radius:0 8px 8px 0;padding:20px 24px;margin:24px 0}
+    .reason-title{font-size:11px;color:#c07070;letter-spacing:1px;text-transform:uppercase;margin-bottom:8px}
+    .reason-text{font-size:14px;color:#d4b0b0;line-height:1.6}
+    @media(max-width:600px){.card,.header,.footer{padding:28px 24px}.headline{font-size:22px}}
+  </style>
+</head>
+<body>
+<div class="wrapper">
+  <div class="header">
+    <div class="logo-mark">Q</div>
+    <div class="brand-name">{{appName}}</div>
+    <div class="brand-tagline">Premium Saloon Booking</div>
+  </div>
+  <div class="card">
+    <div class="icon-circle">⚠️</div>
+    <div class="section-label" style="text-align:center">Business Update</div>
+    <h1 class="headline">Business account<br/>suspended.</h1>
+    <p class="sub">{{businessName}} has been suspended by the admin team.</p>
+
+    <div class="section-label">Reason</div>
+    <div class="reason-block">
+      <div class="reason-title">Admin Note</div>
+      <div class="reason-text">{{reason}}</div>
+    </div>
+
+    <p class="body-text">The business login has been disabled. Please contact our support team to appeal this decision or to understand the next steps.</p>
+  </div>
+  <div class="footer">
+    <p>© 2026 {{appName}}. All rights reserved.<br/>
+    <a href="#">Privacy Policy</a> · <a href="#">Help</a></p>
+  </div>
+</div>
+</body>
+</html>

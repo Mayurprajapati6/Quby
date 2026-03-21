@@ -1,39 +1,51 @@
-import { NextFunction, Request, Response } from "express";
-import { AppError } from "../utils/errors/app.error";
+import { Request, Response, NextFunction } from "express";
+import { ZodError } from "zod";
 import logger from "../config/logger.config";
 
-export const appErrorHandler = (
-  err: AppError, 
-  req: Request, 
-  res: Response, 
-  next: NextFunction
-) => {
-  logger.error(`[${err.name}] ${err.message}`, {
-    statusCode: err.statusCode,
-    path: req.path,
-    method: req.method,
-  });
+export function appErrorHandler(
+  err:  Error,
+  _req: Request,
+  res:  Response,
+  next: NextFunction,
+): void {
+  if ((err as any).statusCode) {
+    res.status((err as any).statusCode).json({ success: false, message: err.message });
+    return;
+  }
 
-  res.status(err.statusCode).json({
-    success: false,
-    message: err.message,
-  });
-};
+  if (err instanceof ZodError) {
+    res.status(422).json({
+      success: false,
+      message: err.errors[0]?.message ?? "Validation error",
+      errors:  err.errors,
+    });
+    return;
+  }
 
-export const genericErrorHandler = (
-  err: Error, 
-  req: Request, 
-  res: Response, 
-  next: NextFunction
-) => {
-  logger.error(`[UnhandledError] ${err.message}`, {
-    stack: err.stack,
-    path: req.path,
-    method: req.method,
-  });
+  if ((err as any).code === "P2002") {
+    res.status(409).json({ success: false, message: "A record with this value already exists." });
+    return;
+  }
 
+  if ((err as any).code === "P2025") {
+    res.status(404).json({ success: false, message: "Record not found." });
+    return;
+  }
+
+  next(err);
+}
+
+export function genericErrorHandler(
+  err:  Error,
+  _req: Request,
+  res:  Response,
+  _next: NextFunction,
+): void {
+  logger.error("[Error Handler]", { message: err.message, stack: err.stack });
   res.status(500).json({
     success: false,
-    message: "Internal Server Error",
+    message: process.env.NODE_ENV === "production" ? "Internal server error" : err.message,
   });
-};
+}
+
+export const errorHandler = appErrorHandler;
