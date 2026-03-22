@@ -1,21 +1,36 @@
-import express from "express";
-import { AdminController } from "./admin.controller";
-import { validateRequestBody } from "../../validators";
-import { updateAdminProfileSchema } from "../../validators/admin.validator";
+import { Router } from "express";
+
 import { authenticate } from "../../middlewares/auth.middleware";
 import { authorizeRoles } from "../../middlewares/role.middleware";
+import { updateAdminProfileSchema, validateRequestBody } from "../../validators";
+import { uploadSingle, handleMulterError } from "../../utils/helpers/multer";
 
-import platformServicesRouter    from "./platform-services/platform-services.routes";
-import businessVerificationRouter from "./business-verification/Business-verification.routes";
+import { AdminController } from "./admin.controller";
+import { adminUsersRouter } from "./users/admin-users.routes";
+import { adminBusinessesRouter } from "./businesses/admin-businesses.routes";
+import { adminVerificationRouter } from "./verification/admin-verification.routes";
+import { adminDashboardRouter } from "./dashboard/admin-dashboard.routes";
+import { platformServicesRouter } from "./platform-services/platform-services.routes";
 
-const router = express.Router();
 
-router.use(authenticate, authorizeRoles("ADMIN"));
+export const adminRouter = Router();
 
-router.get("/profile", AdminController.getProfile);
-router.put("/profile", validateRequestBody(updateAdminProfileSchema), AdminController.updateProfile);
+adminRouter.use(authenticate);
+adminRouter.use(authorizeRoles("ADMIN"));
 
-router.use("/platform-services",      platformServicesRouter);
-router.use("/business-verification",  businessVerificationRouter);
+adminRouter.post("/logout", AdminController.logout);
 
-export default router;
+adminRouter.get("/profile", AdminController.getProfile);
+adminRouter.patch(
+  "/profile",
+  uploadSingle("avatar"),
+  handleMulterError,
+  validateRequestBody(updateAdminProfileSchema),
+  AdminController.updateProfile,
+);
+
+adminRouter.use("/users", adminUsersRouter);
+adminRouter.use("/businesses", adminBusinessesRouter);
+adminRouter.use("/verification", adminVerificationRouter);
+adminRouter.use("/dashboard", adminDashboardRouter);
+adminRouter.use("/platform-services", platformServicesRouter);

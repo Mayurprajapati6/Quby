@@ -1,23 +1,19 @@
-import { PlatformServicesRepository } from "./platform-services.repository";
-import {
-  uploadImageBuffer,
-  deleteFromCloudinary,
-  extractPublicId,
-} from "../../../utils/helpers/cloudinary";
-import { redisClient }   from "../../../config/redis";
-import { NotFoundError, ConflictError } from "../../../utils/errors/app.error";
-import { PLATFORM_SERVICE_MESSAGES }    from "../../../constants/messages";
-import {
+import { PlatformServicesRepository }            from "./platform-services.repository";
+import { uploadImageBuffer, deleteFromCloudinary, extractPublicId } from "../../../utils/helpers/cloudinary";
+import { redisClient }                            from "../../../config/redis";
+import { NotFoundError, ConflictError }           from "../../../utils/errors/app.error";
+import { PLATFORM_SERVICE_MESSAGES }              from "../../../constants/messages";
+import logger                                     from "../../../config/logger.config";
+import type {
   CreatePlatformServiceDTO,
   UpdatePlatformServiceDTO,
   PlatformServiceDTO,
 } from "./platform-services.types";
-import logger from "../../../config/logger.config";
 
 const CACHE_TTL = 60 * 60 * 24;
 
-function cacheKey(serviceFor: string): string {
-  return `cache:platform-services:${serviceFor}`;
+function cacheKey(category: string, serviceFor: string): string {
+  return `cache:platform-services:${category}:${serviceFor}`;
 }
 
 async function invalidateAllCaches(): Promise<void> {
@@ -33,10 +29,10 @@ export class PlatformServicesService {
 
   static async create(
     data:       CreatePlatformServiceDTO,
-    imageFile?: Express.Multer.File      
+    imageFile?: Express.Multer.File,
   ): Promise<PlatformServiceDTO> {
-    let imageUrl:  string | undefined;
-    let publicId:  string | undefined;
+    let imageUrl: string | undefined;
+    let publicId: string | undefined;
 
     if (imageFile) {
       const uploaded = await uploadImageBuffer(imageFile, "SERVICES");
@@ -47,8 +43,8 @@ export class PlatformServicesService {
     try {
       const service = await PlatformServicesRepository.create({
         name:        data.name,
-        category:    "SALON",
         description: data.description,
+        category:    data.category,
         service_for: data.service_for,
         image_url:   imageUrl,
         sort_order:  data.sort_order ?? 0,
@@ -67,11 +63,13 @@ export class PlatformServicesService {
   }
 
   static async list(filters: {
+    category?:    "SALON";
     service_for?: "MEN" | "UNISEX";
     is_active?:   boolean;
   }): Promise<PlatformServiceDTO[]> {
+    const category   = filters.category    ?? "ALL";
     const serviceFor = filters.service_for ?? "ALL";
-    const key        = cacheKey(serviceFor);
+    const key        = cacheKey(category, serviceFor);
 
     try {
       const cached = await redisClient.get(key);
@@ -97,12 +95,12 @@ export class PlatformServicesService {
   static async update(
     id:         string,
     data:       UpdatePlatformServiceDTO,
-    imageFile?: Express.Multer.File       
+    imageFile?: Express.Multer.File,
   ): Promise<PlatformServiceDTO> {
     const existing = await PlatformServicesRepository.findById(id);
     if (!existing) throw new NotFoundError(PLATFORM_SERVICE_MESSAGES.NOT_FOUND);
 
-    let imageUrl:   string | undefined;
+    let imageUrl:    string | undefined;
     let newPublicId: string | undefined;
 
     if (imageFile) {
@@ -123,8 +121,8 @@ export class PlatformServicesService {
       if (imageUrl && existing.image_url) {
         const oldPublicId = extractPublicId(existing.image_url);
         if (oldPublicId) {
-          deleteFromCloudinary(oldPublicId).catch((e) =>
-            logger.warn("[PlatformServices] Old image cleanup failed (non-fatal):", e)
+          await deleteFromCloudinary(oldPublicId).catch((e) =>
+            logger.warn("[PlatformServices] Old image cleanup failed:", e)
           );
         }
       }
@@ -146,15 +144,19 @@ export class PlatformServicesService {
     if (!existing) throw new NotFoundError(PLATFORM_SERVICE_MESSAGES.NOT_FOUND);
 
     const inUse = await PlatformServicesRepository.countBusinessOfferings(id);
-    if (inUse > 0) throw new ConflictError(PLATFORM_SERVICE_MESSAGES.IN_USE);
+    if (inUse > 0) {
+      throw new ConflictError(
+        "This service is in use by one or more businesses and cannot be deleted. Deactivate it instead."
+      );
+    }
 
     await PlatformServicesRepository.delete(id);
 
     if (existing.image_url) {
       const oldPublicId = extractPublicId(existing.image_url);
       if (oldPublicId) {
-        deleteFromCloudinary(oldPublicId).catch((e) =>
-          logger.warn("[PlatformServices] Image cleanup on delete failed (non-fatal):", e)
+        await deleteFromCloudinary(oldPublicId).catch((e) =>
+          logger.warn("[PlatformServices] Image cleanup on delete failed:", e)
         );
       }
     }
