@@ -1,11 +1,10 @@
 import { prisma } from "../../../config/prisma";
-
 export class PlatformServicesRepository {
 
   static async create(data: {
     name:         string;
-    category:     "SALON";
     description?: string;
+    category:     "SALON";
     service_for:  "MEN" | "UNISEX";
     image_url?:   string;
     sort_order?:  number;
@@ -18,11 +17,13 @@ export class PlatformServicesRepository {
   }
 
   static async findAll(filters: {
+    category?:    "SALON";
     service_for?: "MEN" | "UNISEX";
     is_active?:   boolean;
   }) {
     return prisma.platformService.findMany({
       where: {
+        ...(filters.category    && { category:    filters.category }),
         ...(filters.service_for && { service_for: filters.service_for }),
         ...(filters.is_active !== undefined && { is_active: filters.is_active }),
       },
