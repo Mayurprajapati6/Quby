@@ -1,169 +1,331 @@
-import { BusinessRepository }  from './business.repository';
-import {uploadMultipleImageBuffers, bulkDeleteFromCloudinary} from '../../../utils/helpers/cloudinary';
-import { generateUniqueSlug } from '../../../utils/helpers/slug.helper';
-import { redisClient } from '../../../config/redis';
-import { socketService } from '../../../socket/socket.service';
-import { queueEmail } from '../../../services/email.services';
-import { prisma } from '../../../config/prisma';
-import { NotFoundError, BadRequestError } from '../../../utils/errors/app.error';
-import { BUSINESS_MESSAGES } from '../../../constants/messages';
-import {CreateBusinessDTO, UpdateBusinessDTO, BusinessDTO}  from './business.types';
-import logger from '../../../config/logger.config';
+import { prisma } from "../../../config/prisma";
+import { OwnerBusinessRepository as Repo } from "./business.repository";
+import { AuthRepository } from "../../../module/auth/auth.repository";
+import { generateUniqueSlug } from "../../../utils/helpers/slug";
+import {
+  uploadImageBuffer,
+  deleteFromCloudinary,
+  bulkDeleteFromCloudinary,
+} from "../../../utils/helpers/cloudinary";
+import { queueEmail } from "../../../services/email.services";
+import {
+  NotFoundError,
+  BadRequestError,
+  ConflictError,
+  ForbiddenError,
+} from "../../../utils/errors/app.error";
+import logger from "../../../config/logger.config";
+import { formatInTimeZone } from "date-fns-tz";
+import type { CreateBusinessDTO, UpdateBusinessDTO } from "./business.types";
 
-async function invalidateBusinessCache(slug: string): Promise<void> {
-  try {
-    await redisClient.del(`cache:business:${slug}`);
-  } catch (err) {
-    logger.warn('[Business] Cache invalidation failed (non-fatal):', err);
+const IST = "Asia/Kolkata";
+
+function toIST(d: Date) { return formatInTimeZone(d, IST, "yyyy-MM-dd'T'HH:mm:ssxxx"); }
+export class BusinessService {
+
+  private static async resolveOwner(userId: string) {
+    const owner = await prisma.owner.findUnique({
+      where:  { user_id: userId },
+      select: { id: true, name: true, user: { select: { email: true } } },
+    });
+    if (!owner) throw new NotFoundError("Owner profile not found.");
+    return owner;
+  }
+
+  static async listMyBusinesses(
+    userId:  string,
+    filters: { name?: string; city?: string; state?: string },
+    page:    number,
+    limit:   number,
+  ) {
+    const owner = await this.resolveOwner(userId);
+    const { businesses, total } = await Repo.findAllByOwnerId(owner.id, filters, page, limit);
+
+    return {
+      businesses: businesses.map(b => ({
+        id:                 b.id,
+        business_name:      b.business_name,
+        slug:               b.slug,
+        city:               b.city,
+        state:              b.state,
+        service_for:        b.service_for,
+        primary_image:      b.primary_image,
+        logo_url:           b.logo_url          ?? null,
+        is_verified:        b.is_verified,
+        is_active:          b.is_active,
+        average_rating:     b.average_rating    ?? 0,
+        total_reviews:      b.total_reviews,
+        active_staff_count: b.active_staff_count,
+        total_earning_inr:  (b.wallet_balance ?? 0) / 100,
+        today_bookings:     b.today_bookings,
+        created_at:         toIST(b.created_at),
+      })),
+      total,
+      page,
+      limit,
+      total_pages: Math.ceil(total / limit),
+    };
+  }
+
+  static async getMyBusiness(userId: string, businessId: string) {
+    const owner    = await this.resolveOwner(userId);
+    const business = await Repo.findByOwnerAndId(owner.id, businessId);
+    if (!business) throw new NotFoundError("Business not found.");
+    return business;
+  }
+
+  static async createBusiness(
+    userId:     string,
+    dto:        CreateBusinessDTO,
+    logoFile?:  Express.Multer.File,
+    coverFile?: Express.Multer.File,
+  ) {
+    const owner = await this.resolveOwner(userId);
+
+    const slug = await generateUniqueSlug(dto.business_name, dto.city);
+
+    let logo_url:        string | undefined;
+    let cover_image_url: string | undefined;
+
+    if (logoFile) {
+      const r  = await uploadImageBuffer(logoFile, "BUSINESSES");
+      logo_url = r.secure_url;
+    }
+    if (coverFile) {
+      const r         = await uploadImageBuffer(coverFile, "BUSINESSES");
+      cover_image_url = r.secure_url;
+    }
+
+    const business = await Repo.create({
+      ownerId:           owner.id,
+      authUserId:        undefined,
+      business_name:     dto.business_name,
+      slug,
+      business_type:     dto.business_type ?? "SALON",
+      service_for:       dto.service_for,
+      description:       dto.description,
+      address_line1:     dto.address_line1,
+      address_line2:     dto.address_line2,
+      city:              dto.city,
+      state:             dto.state,
+      pincode:           dto.pincode,
+      country:           dto.country ?? "India",
+      latitude:          dto.latitude,
+      longitude:         dto.longitude,
+      map_link:          dto.map_link,
+      business_phone:    dto.business_phone,
+      website_url:       dto.website_url,
+      instagram_url:     dto.instagram_url,
+      facebook_url:      dto.facebook_url,
+      twitter_url:       dto.twitter_url,
+      youtube_url:       dto.youtube_url,
+      whatsapp_number:   dto.whatsapp_number,
+      logo_url,
+      cover_image_url,
+      break_time_minutes:        dto.break_time_minutes        ?? 5,
+      cancellation_window_hours: dto.cancellation_window_hours ?? 2,
+    });
+
+    await prisma.owner.update({
+      where: { id: owner.id },
+      data:  { total_businesses: { increment: 1 }, active_businesses: { increment: 1 } },
+    });
+
+    return business;
+  }
+
+  static async updateBusiness(
+    userId:     string,
+    businessId: string,
+    dto:        UpdateBusinessDTO,
+    logoFile?:  Express.Multer.File,
+    coverFile?: Express.Multer.File,
+  ) {
+    const owner    = await this.resolveOwner(userId);
+    const business = await Repo.findByOwnerAndId(owner.id, businessId);
+    if (!business) throw new NotFoundError("Business not found.");
+
+    let slug = business.slug;
+    if (dto.business_name || dto.city) {
+      slug = await generateUniqueSlug(
+        dto.business_name ?? business.business_name,
+        dto.city          ?? business.city,
+      );
+    }
+
+    let logo_url        = business.logo_url;
+    let cover_image_url = business.cover_image_url;
+
+    if (logoFile) {
+      if (business.logo_url) {
+        const oldId = extractPublicId(business.logo_url);
+        if (oldId) await deleteFromCloudinary(oldId).catch(() => {});
+      }
+      logo_url = (await uploadImageBuffer(logoFile, "BUSINESSES")).secure_url;
+    }
+
+    if (coverFile) {
+      if (business.cover_image_url) {
+        const oldId = extractPublicId(business.cover_image_url);
+        if (oldId) await deleteFromCloudinary(oldId).catch(() => {});
+      }
+      cover_image_url = (await uploadImageBuffer(coverFile, "BUSINESSES")).secure_url;
+    }
+
+    return Repo.update(business.id, {
+      ...dto,
+      slug,
+      logo_url,
+      cover_image_url,
+    });
+  }
+
+  static async uploadImages(
+    userId:     string,
+    businessId: string,
+    files:      Express.Multer.File[],
+  ) {
+    const owner    = await this.resolveOwner(userId);
+    const business = await Repo.findByOwnerAndId(owner.id, businessId);
+    if (!business) throw new NotFoundError("Business not found.");
+
+    if (!files.length) throw new BadRequestError("No images provided.");
+
+    const existingCount = await Repo.countImages(businessId);
+    const MAX_IMAGES    = 10;
+    if (existingCount + files.length > MAX_IMAGES) {
+      throw new BadRequestError(
+        `A business can have at most ${MAX_IMAGES} images. ` +
+        `Currently has ${existingCount}, tried to add ${files.length}.`
+      );
+    }
+
+    const uploads = await Promise.allSettled(
+      files.map(f => uploadImageBuffer(f, "BUSINESSES"))
+    );
+
+    const created = [];
+    for (let i = 0; i < uploads.length; i++) {
+      const result = uploads[i];
+      if (result.status === "fulfilled") {
+        const isPrimary = existingCount === 0 && i === 0;
+        const img = await Repo.createImage({
+          business_id: businessId,
+          image_url:   result.value.secure_url,
+          public_id:   result.value.public_id,
+          sort_order:  existingCount + i,
+          is_primary:  isPrimary,
+        });
+        created.push(img);
+      }
+    }
+
+    return created;
+  }
+
+  static async deleteImage(userId: string, businessId: string, imageId: string) {
+    const owner    = await this.resolveOwner(userId);
+    const business = await Repo.findByOwnerAndId(owner.id, businessId);
+    if (!business) throw new NotFoundError("Business not found.");
+
+    const image = await Repo.findImage(imageId);
+    if (!image || image.business_id !== businessId) throw new NotFoundError("Image not found.");
+
+    if (image.public_id) await deleteFromCloudinary(image.public_id).catch(() => {});
+    await Repo.deleteImage(imageId);
+  }
+
+  static async setPrimaryImage(userId: string, businessId: string, imageId: string) {
+    const owner    = await this.resolveOwner(userId);
+    const business = await Repo.findByOwnerAndId(owner.id, businessId);
+    if (!business) throw new NotFoundError("Business not found.");
+
+    const image = await Repo.findImage(imageId);
+    if (!image || image.business_id !== businessId) throw new NotFoundError("Image not found.");
+
+    await Repo.setImageAsPrimary(businessId, imageId);
+    return { primary_image_id: imageId };
+  }
+
+  static async deleteBusiness(userId: string, businessId: string) {
+    const owner = await this.resolveOwner(userId);
+
+    const business = await Repo.findByIdForDeletion(businessId);
+    if (!business) throw new NotFoundError("Business not found.");
+
+    const owned = await prisma.business.findFirst({
+      where:  { id: businessId, owner_id: owner.id },
+      select: { id: true },
+    });
+    if (!owned) throw new ForbiddenError("This business does not belong to you.");
+
+    const activeCount = (business as any)._count?.bookings ?? 0;
+    if (activeCount > 0) {
+      throw new BadRequestError(
+        `Cannot delete: ${activeCount} active booking(s) exist. ` +
+        "Please wait for all active bookings to complete."
+      );
+    }
+
+    const heldEscrow = await prisma.escrowTransaction.count({
+      where: { business_id: businessId, status: "HELD" },
+    });
+    if (heldEscrow > 0) {
+      throw new BadRequestError(
+        `Cannot delete: ${heldEscrow} payment(s) are held in escrow. ` +
+        "Please wait for them to be released or refunded."
+      );
+    }
+
+    const publicIds = ((business as any).images ?? [])
+      .map((img: any) => img.public_id)
+      .filter(Boolean);
+    if (publicIds.length) await bulkDeleteFromCloudinary(publicIds).catch(() => {});
+
+    if ((business as any).auth_user_id) {
+      await prisma.user.delete({ where: { id: (business as any).auth_user_id } }).catch(() => {});
+    }
+
+    await Repo.delete(businessId);
+
+    await prisma.owner.update({
+      where: { id: owner.id },
+      data:  { total_businesses: { decrement: 1 }, active_businesses: { decrement: 1 } },
+    });
+  }
+
+  static async submitForVerification(userId: string, businessId: string) {
+    const owner    = await this.resolveOwner(userId);
+    const business = await Repo.findByOwnerAndId(owner.id, businessId);
+    if (!business) throw new NotFoundError("Business not found.");
+
+    if (business.is_verified) throw new BadRequestError("Business is already verified.");
+
+    const admins = await prisma.admin.findMany({
+      select: { user: { select: { email: true } } },
+    });
+
+    admins.forEach(({ user }) => {
+      queueEmail({
+        to:   user.email,
+        type: "business-submitted",
+        data: {
+          businessName:  business.business_name,
+          ownerName:     owner.name,
+          adminName:     "Admin",
+          adminPanelUrl: `${process.env.CLIENT_URL}/admin/verification/${business.id}`,
+          submittedAt:   new Date().toISOString(),
+        },
+      }).catch(err => logger.warn("[Business] Admin notification failed:", err));
+    });
+
+    return { message: "Submitted for verification.", verification_status: "PENDING" };
   }
 }
 
-export class BusinessService {
-
-  static async create(
-    ownerId:    string,
-    data:       CreateBusinessDTO,
-    imageFiles: Express.Multer.File[]
-  ): Promise<BusinessDTO> {
-    if (!imageFiles || imageFiles.length < 3) {
-      throw new BadRequestError('At least 3 business images are required.');
-    }
-    if (imageFiles.length > 10) {
-      throw new BadRequestError('Maximum 10 images allowed.');
-    }
-
-    const slug = await generateUniqueSlug(data.business_name, data.city);
-
-    let rawUploads: Awaited<ReturnType<typeof uploadMultipleImageBuffers>>;
-    try {
-      rawUploads = await uploadMultipleImageBuffers(imageFiles, 'BUSINESSES');
-    } catch (err: any) {
-      throw new BadRequestError(`Image upload failed: ${err.message}`);
-    }
-
-    const uploadedImages = rawUploads.map((result, i) => ({
-      image_url:  result.secure_url,
-      public_id:  result.public_id,
-      is_primary: i === 0,
-      sort_order: i,
-    }));
-
-    try {
-      const business = await BusinessRepository.createWithTransaction({
-        ownerId,
-        slug,
-        business_name:  data.business_name,
-        business_type:  'SALON',
-        service_for:    data.service_for,
-        description:    data.description,
-        address_line1:  data.address_line1,
-        address_line2:  data.address_line2,
-        city:           data.city,
-        state:          data.state,
-        pincode:        data.pincode,
-        latitude:       data.latitude,
-        longitude:      data.longitude,
-        business_email: data.business_email,
-        business_phone: data.business_phone,
-        website_url:    data.website_url,
-        images:         uploadedImages,
-      });
-
-      const full = await BusinessRepository.findByOwnerAndId(business.id, ownerId);
-      return full as unknown as BusinessDTO;
-    } catch (err) {
-      bulkDeleteFromCloudinary(uploadedImages.map((i) => i.public_id)).catch((e) =>
-        logger.error('[Business] Cloudinary rollback after DB failure failed:', e)
-      );
-      throw err;
-    }
-  }
-
-  static async getMyBusinesses(ownerId: string): Promise<BusinessDTO[]> {
-    const businesses = await BusinessRepository.findAllByOwner(ownerId);
-    return businesses as unknown as BusinessDTO[];
-  }
-
-  static async getOne(businessId: string, ownerId: string): Promise<BusinessDTO> {
-    const business = await BusinessRepository.findByOwnerAndId(businessId, ownerId);
-    if (!business) throw new NotFoundError(BUSINESS_MESSAGES.NOT_FOUND);
-    return business as unknown as BusinessDTO;
-  }
-
-  static async update(
-    businessId: string,
-    ownerId:    string,
-    data:       UpdateBusinessDTO
-  ): Promise<BusinessDTO> {
-    const business = await BusinessRepository.findByOwnerAndId(businessId, ownerId);
-    if (!business) throw new NotFoundError(BUSINESS_MESSAGES.NOT_FOUND);
-
-    await BusinessRepository.update(businessId, {
-      ...(data.business_name  && { business_name:  data.business_name }),
-      ...(data.description    !== undefined && { description:    data.description }),
-      ...(data.address_line1  && { address_line1:  data.address_line1 }),
-      ...(data.address_line2  !== undefined && { address_line2:  data.address_line2 }),
-      ...(data.city           && { city:           data.city }),
-      ...(data.state          && { state:          data.state }),
-      ...(data.pincode        && { pincode:        data.pincode }),
-      ...(data.latitude       !== undefined && { latitude:       data.latitude }),
-      ...(data.longitude      !== undefined && { longitude:      data.longitude }),
-      ...(data.business_email !== undefined && { business_email: data.business_email }),
-      ...(data.business_phone !== undefined && { business_phone: data.business_phone }),
-      ...(data.website_url    !== undefined && { website_url:    data.website_url }),
-    });
-
-    await invalidateBusinessCache(business.slug);
-
-    const full = await BusinessRepository.findByOwnerAndId(businessId, ownerId);
-    return full as unknown as BusinessDTO;
-  }
-
-  static async submitForVerification(
-    businessId: string,
-    ownerId:    string
-  ): Promise<void> {
-    const business = await BusinessRepository.findByOwnerAndId(businessId, ownerId);
-    if (!business) throw new NotFoundError(BUSINESS_MESSAGES.NOT_FOUND);
-    if (business.is_verified) throw new BadRequestError(BUSINESS_MESSAGES.ALREADY_VERIFIED);
-
-    await BusinessRepository.submitForVerification(businessId);
-    await invalidateBusinessCache(business.slug);
-
-    try {
-      const admins = await prisma.admin.findMany({
-        include: {
-          user: { select: { id: true, email: true } },
-        },
-      });
-
-      const ownerName = (business as any).owner?.name ?? 'Unknown';
-
-      for (const admin of admins) {
-        socketService.notifyNew(admin.user.id, {
-          type:    'NEW_BUSINESS_SUBMISSION',
-          title:   'New Business Submitted',
-          message: `${business.business_name} has been submitted for verification`,
-          data: {
-            businessId,
-            businessName: business.business_name,
-            ownerName,
-            submittedAt:  new Date().toISOString(),
-          },
-        } as any);
-        await queueEmail({
-          to:   admin.user.email,
-          type: 'business-submitted',
-          data: {
-            adminName:    admin.name,
-            businessName: business.business_name,
-            businessId,
-            ownerName,
-          },
-        });
-      }
-    } catch (err) {
-      logger.warn('[Business] Admin notification failed (non-fatal):', err);
-    }
-  }
+function extractPublicId(url: string): string | undefined {
+  try {
+    const m = url.match(/\/upload\/(?:v\d+\/)?(.+?)(\.\w+)?$/);
+    return m?.[1];
+  } catch { return undefined; }
 }

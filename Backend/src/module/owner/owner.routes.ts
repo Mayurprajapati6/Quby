@@ -1,30 +1,49 @@
-import express from "express";
-import { OwnerController } from "./owner.controller";
-import { validateRequestBody } from "../../validators";
-import { updateOwnerProfileSchema } from "../../validators/owner.validator";
+import { Router } from "express";
 import { authenticate } from "../../middlewares/auth.middleware";
 import { authorizeRoles } from "../../middlewares/role.middleware";
+import { ROLES } from "../../constants/roles";
+import { uploadSingle, handleMulterError } from "../../utils/helpers/multer";
+import { validateRequestBody } from "../../validators";
+import { updateOwnerProfileSchema } from "../../validators/owner.validator";
+import { OwnerController } from "./owner.controller";
+import { ownerBusinessRouter } from "./business/business.routes";
+import { ownerStaffRouter } from "./business-staff/business-staff.routes";
+import { ownerLeaveRouter } from "./leave/owner-leave.routes";
+import { ownerDashboardRouter } from "./dashboard/owner-dashboard.routes";
+import { ownerBookingsRouter } from "./bookings/owner-bookings.routes";
+import { ownerReviewsRouter } from "./reviews/owner-reviews.routes";
+import { ownerWalletRouter } from "./wallet/owner-wallet.routes";
+import { ownerEscrowRouter } from "./escrow/owner-escrow.routes";
+import { ownerAttendanceRouter } from "./attendance/owner-attendance.routes";
+import { staffDetailRouter } from "./staff-detail/staff-detail.routes";
 
-// Phase 2 sub-routers
-import businessRouter        from "./business/business.route";
-import businessServicesRouter from "./business-services/business-services.routes";
-import scheduleRouter        from "./schedule/schedule.routes";
-import BusinessStaffRouter   from "./business-staff/business-staff.routes"
+export const ownerRouter = Router();
 
-const router = express.Router();
+ownerRouter.use(authenticate);
+ownerRouter.use(authorizeRoles(ROLES.OWNER));
 
-router.use(authenticate, authorizeRoles("OWNER"));
+ownerRouter.get("/profile", OwnerController.getProfile);
+ownerRouter.patch(
+  "/profile",
+  uploadSingle("avatar"),
+  handleMulterError,
+  validateRequestBody(updateOwnerProfileSchema),
+  OwnerController.updateProfile,
+);
 
-// Profile
-router.get("/profile", OwnerController.getProfile);
-router.put("/profile", validateRequestBody(updateOwnerProfileSchema), OwnerController.updateProfile);
+ownerRouter.post("/logout", OwnerController.logout);
 
-// Phase 2: Business management
-router.use("/businesses", businessRouter);
+ownerRouter.patch("/notifications/read-all", OwnerController.markAllNotificationsRead);
+ownerRouter.get("/notifications", OwnerController.getNotifications);
+ownerRouter.patch("/notifications/:id/read", OwnerController.markNotificationRead);
 
-// Phase 2: Per-business sub-resources (services, schedule, staff)
-router.use("/businesses/:businessId/services",  businessServicesRouter);
-router.use("/businesses/:businessId/schedule",  scheduleRouter);
-router.use("/businesses/:businessId/staff",     BusinessStaffRouter);
-
-export default router;
+ownerRouter.use("/businesses", ownerBusinessRouter);   
+ownerRouter.use("/staff", ownerStaffRouter);      
+ownerRouter.use("/leave", ownerLeaveRouter);      
+ownerRouter.use("/dashboard", ownerDashboardRouter);  
+ownerRouter.use("/bookings", ownerBookingsRouter);   
+ownerRouter.use("/reviews", ownerReviewsRouter);    
+ownerRouter.use("/wallet", ownerWalletRouter);     
+ownerRouter.use("/escrow", ownerEscrowRouter);     
+ownerRouter.use("/attendance", ownerAttendanceRouter); 
+ownerRouter.use("/staff-detail", staffDetailRouter);    
