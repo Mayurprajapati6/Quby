@@ -1,102 +1,124 @@
-import { StaffRepository }   from "./staff.repository";
-import { toStaffProfile }    from "./staff.mapper";
-import { UpdateStaffProfileDTO, StaffProfile } from "./staff.types";
+import { StaffRepository } from "./staff.repository";
+import { uploadImageBuffer, deleteFromCloudinary } from "../../utils/helpers/cloudinary";
+import { verifyPassword } from "../../utils/helpers/crypto";
+import { prisma } from "../../config/prisma";
 import {
-  uploadImageBuffer,
-  deleteFromCloudinary,
-  extractPublicId,
-} from "../../utils/helpers/cloudinary";
-import { NotFoundError, BadRequestError } from "../../utils/errors/app.error";
-import { redisClient }  from "../../config/redis";
-import logger           from "../../config/logger.config";
+  NotFoundError,
+  ForbiddenError,
+  ConflictError,
+  BadRequestError,
+  UnauthorizedError,
+} from "../../utils/errors/app.error";
+import { formatInTimeZone } from "date-fns-tz";
 
-const CACHE_TTL = 60 * 5;
+const IST = "Asia/Kolkata";
+function toISTDate(d: Date) { return formatInTimeZone(d, IST, "yyyy-MM-dd"); }
 
-function cacheKey(staffId: string): string {
-    return `cache:staff:${staffId}:profile`;
+function toDTO(s: any) {
+  return {
+    id:               s.id,
+    name:             s.name,
+    email:            s.email,
+    phone:            s.phone          ?? null,
+    avatar_url:       s.avatar_url     ?? null,
+    bio:              s.bio            ?? null,
+    specialization:   s.specialization ?? null,
+    experience_years: s.experience_years ?? null,
+    city:             s.city           ?? null,
+    state:            s.state          ?? null,
+    is_active:        s.is_active,
+    is_verified:      s.is_verified,
+    average_rating:   s.average_rating  ?? 0,
+    total_reviews:    s.total_reviews   ?? 0,
+    current_streak:   s.current_service_streak ?? 0,
+    longest_streak:   s.longest_service_streak ?? 0,
+    join_date:        toISTDate(s.created_at),
+    business: {
+      id:            s.business.id,
+      business_name: s.business.business_name,
+      logo_url:      s.business.logo_url ?? null,
+      owner_name:    s.business.owner?.name    ?? null,
+      owner_phone:   s.business.owner?.phone   ?? null,
+      owner_avatar:  s.business.owner?.avatar_url ?? null,
+    },
+    services: (s.services ?? []).map((sv: any) => ({
+      id:               sv.id,
+      name:             sv.service_offering.platform_service.name,
+      category:         sv.service_offering.platform_service.category ?? null,
+      duration_minutes: sv.duration_minutes,
+      is_available:     sv.is_available,
+    })),
+    schedule: (s.schedules ?? []).map((sc: any) => ({
+      day_of_week:  sc.day_of_week,
+      is_available: sc.is_available,
+      start_time:   sc.start_time ?? null,
+      end_time:     sc.end_time   ?? null,
+    })),
+  };
 }
+
 export class StaffService {
 
-    static async getProfile(userId: string): Promise<StaffProfile> {
-        const staff = await StaffRepository.findByUserId(userId);
-        if (!staff) throw new NotFoundError("Staff profile not found.");
+  static async getProfile(userId: string) {
+    const staff = await StaffRepository.findByUserId(userId);
+    if (!staff)          throw new NotFoundError("Staff profile not found.");
+    if (!staff.is_active) throw new ForbiddenError("Your account has been deactivated.");
+    return toDTO(staff);
+  }
 
-        const key = cacheKey(staff.id);
+  static async updateProfile(
+    userId:      string,
+    data:        {
+      name?:             string;
+      phone?:            string;
+      bio?:              string;
+      specialization?:   string;
+      experience_years?: number;
+      city?:             string;
+      state?:            string;
+    },
+    avatarFile?: Express.Multer.File,
+  ) {
+    const staff = await StaffRepository.findByUserId(userId);
+    if (!staff)          throw new NotFoundError("Staff profile not found.");
+    if (!staff.is_active) throw new ForbiddenError("Your account has been deactivated.");
 
-        try {
-            const cached = await redisClient.get(key);
-            if (cached) {
-                logger.info(`[Staff] Cache HIT: ${key}`);
-                return JSON.parse(cached) as StaffProfile;
-            }
-        } catch (err) {
-            logger.warn(`[Staff] Cache GET failed (non-fatal): ${err}`);
-        }
-
-        logger.info(`[Staff] Cache MISS: ${key}`);
-        const profile = toStaffProfile(staff.user, staff);
-
-        try {
-            await redisClient.setex(key, CACHE_TTL, JSON.stringify(profile));
-        } catch (err) {
-            logger.warn(`[Staff] Cache SET failed (non-fatal): ${err}`);
-        }
-
-        return profile;
+    if (data.phone) {
+      const existing = await StaffRepository.findByPhone(data.phone);
+      if (existing && existing.id !== staff.id) {
+        throw new ConflictError("This phone number is already in use.");
+      }
     }
 
-    static async updateProfile(
-        userId:    string,
-        data:      UpdateStaffProfileDTO,
-        avatarFile?: Express.Multer.File      // ← multer file (optional)
-    ): Promise<StaffProfile> {
-        const staff = await StaffRepository.findByUserId(userId);
-        if (!staff) throw new NotFoundError("Staff profile not found.");
-
-        let newAvatarUrl:     string | undefined;
-        let newPublicId:      string | undefined;
-        let oldAvatarPublicId: string | undefined;
-
-        if (avatarFile) {
-            if (staff.avatar_url) {
-                oldAvatarPublicId = extractPublicId(staff.avatar_url);
-            }
-
-            try {
-                const uploaded = await uploadImageBuffer(avatarFile, "PROFILES");
-                newAvatarUrl = uploaded.secure_url;
-                newPublicId  = uploaded.public_id;
-            } catch (err: any) {
-                throw new BadRequestError(`Avatar upload failed: ${err.message}`);
-            }
-        }
-
-        try {
-            await StaffRepository.updateProfile(staff.id, {
-                ...(newAvatarUrl              !== undefined && { avatar_url:       newAvatarUrl }),
-                ...(data.bio                  !== undefined && { bio:              data.bio }),
-                ...(data.experience_years     !== undefined && { experience_years: data.experience_years }),
-            });
-        } catch (err) {
-            if (newPublicId) {
-                await deleteFromCloudinary(newPublicId).catch((e) =>
-                    logger.error(`[Staff] Cloudinary rollback FAILED for ${newPublicId}:`, e)
-                );
-            }
-            throw err;
-        }
-
-        if (oldAvatarPublicId && newAvatarUrl) {
-            deleteFromCloudinary(oldAvatarPublicId).catch(() =>
-                logger.warn(`[Staff] Old avatar cleanup failed (non-fatal): ${oldAvatarPublicId}`)
-            );
-        }
-
-        redisClient.del(cacheKey(staff.id)).catch((err) =>
-            logger.warn(`[Staff] Cache DEL failed (non-fatal): ${err}`)
-        );
-
-        const updated = await StaffRepository.findByUserId(userId);
-        return toStaffProfile(updated!.user, updated!);
+    let avatarUrl: string | undefined;
+    if (avatarFile) {
+      if (staff.avatar_url) {
+        const m = staff.avatar_url.match(/\/upload\/(?:v\d+\/)?(.+?)(\.\w+)?$/);
+        if (m?.[1]) await deleteFromCloudinary(m[1]).catch(() => {});
+      }
+      const uploaded = await uploadImageBuffer(avatarFile, "PROFILES");
+      avatarUrl = uploaded.secure_url;
     }
+
+    const updated = await StaffRepository.updateProfile(staff.id, {
+      ...data,
+      ...(avatarUrl && { avatar_url: avatarUrl }),
+    });
+
+    return toDTO(updated);
+  }
+
+  static async deleteAccount(userId: string, password: string): Promise<void> {
+    const user = await prisma.user.findUnique({
+      where:  { id: userId },
+      select: { id: true, password_hash: true },
+    });
+    if (!user) throw new NotFoundError("Account not found.");
+    if (!user.password_hash) throw new BadRequestError("Account setup is incomplete.");
+
+    const isValid = await verifyPassword(password, user.password_hash);
+    if (!isValid) throw new UnauthorizedError("Incorrect password.");
+
+    await prisma.user.delete({ where: { id: userId } });
+  }
 }

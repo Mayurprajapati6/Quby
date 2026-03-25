@@ -1,30 +1,55 @@
-// ─────────────────────────────────────────────────────────────────────────────
-// MODULE : staff
-// FILE   : staff.routes.ts
-// CHANGE : PATCH /profile now uses uploadSingle + handleMulterError before controller
-//          Avatar arrives as multipart/form-data field "image"
-// ─────────────────────────────────────────────────────────────────────────────
-
-import express                   from "express";
-import { StaffController }       from "./staff.controller";
-import { validateRequestBody }   from "../../validators";
-import { updateStaffProfileSchema } from "../../validators/staff.validator";
-import { authenticate }          from "../../middlewares/auth.middleware";
-import { authorizeRoles }        from "../../middlewares/role.middleware";
+import { Router } from "express";
+import { authenticate } from "../../middlewares/auth.middleware";
+import { authorizeRoles } from "../../middlewares/role.middleware";
+import { validateRequestBody } from "../../validators";
+import {
+  updateStaffProfileSchema,
+  deleteStaffAccountSchema,
+} from "../../validators/staff.validator";
 import { uploadSingle, handleMulterError } from "../../utils/helpers/multer";
+import { StaffController } from "./staff.controller";
+import { staffQueueRouter } from "./queue/staff-queue.routes";
+import { staffOperationRouter } from "./operations/staff-operation.routes";
+import { staffBookingsRouter } from "./bookings/staff-bookings.routes";
+import { staffReviewsRouter }  from "./reviews/staff-reviews.routes";
+import { staffHolidayRouter } from "./holiday/staff-holiday.routes";
+import { staffQrLogRouter } from "./qr-log/staff-qr-log.routes";
+import { staffEscrowRouter } from "./escrow/staff-escrow.routes";
+import { staffDashboardRouter } from "./dashboard/staff-dashboard.routes";
+import { staffAttendanceRouter } from "./attendance/staff-attendance.routes";
+import { staffNotificationsRouter } from "./notifications/staff-notifications.routes";
+import { staffLeaveRouter } from "./leave/staff-leave.routes";
 
-const router = express.Router();
+export const staffRouter = Router();
 
-router.use(authenticate, authorizeRoles("STAFF"));
+staffRouter.use(authenticate);
+staffRouter.use(authorizeRoles("STAFF"));
 
-router.get("/profile", StaffController.getProfile);
+staffRouter.post("/logout", StaffController.logout);
 
-router.patch(
+staffRouter.get("/profile", StaffController.getProfile);
+
+staffRouter.patch(
   "/profile",
-  uploadSingle,                               
-  handleMulterError,                        
+  uploadSingle("avatar"),
+  handleMulterError,
   validateRequestBody(updateStaffProfileSchema),
-  StaffController.updateProfile
+  StaffController.updateProfile,
+);
+staffRouter.delete(
+  "/account",
+  validateRequestBody(deleteStaffAccountSchema),
+  StaffController.deleteAccount,
 );
 
-export default router;
+staffRouter.use("/queue", staffQueueRouter);
+staffRouter.use("/operations", staffOperationRouter);
+staffRouter.use("/bookings", staffBookingsRouter);
+staffRouter.use("/reviews", staffReviewsRouter);
+staffRouter.use("/holiday", staffHolidayRouter);
+staffRouter.use("/qr-log", staffQrLogRouter);
+staffRouter.use("/escrow", staffEscrowRouter);
+staffRouter.use("/dashboard", staffDashboardRouter);
+staffRouter.use("/leave", staffLeaveRouter);
+staffRouter.use("/attendance", staffAttendanceRouter);
+staffRouter.use("/notifications", staffNotificationsRouter);
