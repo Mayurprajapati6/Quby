@@ -1,14 +1,25 @@
-import express from "express";
+import { Router } from "express";
 import { ScheduleController } from "./schedule.controller";
 import { validateRequestBody } from "../../../validators";
-import { updateScheduleSchema, createHolidaySchema } from "../../../validators/schedule.validator";
+import {
+  updateScheduleSchema,
+  createHolidaySchema,
+} from "../../../validators/schedule.validator";
 
-const router = express.Router({ mergeParams: true });
+export const scheduleRouter = Router({ mergeParams: true });
 
-router.get( "/",ScheduleController.getSchedule);
-router.patch("/",validateRequestBody(updateScheduleSchema),ScheduleController.updateSchedule);
-router.get("/holidays",ScheduleController.getHolidays);
-router.post("/holidays", validateRequestBody(createHolidaySchema),ScheduleController.createHoliday);
-router.delete("/holidays/:holidayId",ScheduleController.deleteHoliday);
+// Static paths before /:param
+scheduleRouter.get("/holidays", ScheduleController.getHolidays);
+scheduleRouter.post(
+  "/holidays",
+  validateRequestBody(createHolidaySchema),
+  ScheduleController.createHoliday,
+);
+scheduleRouter.delete("/holidays/:holidayId", ScheduleController.deleteHoliday);
 
-export default router;
+scheduleRouter.get("/", ScheduleController.getSchedule);
+scheduleRouter.put(
+  "/",
+  validateRequestBody(updateScheduleSchema),
+  ScheduleController.updateSchedule,
+);

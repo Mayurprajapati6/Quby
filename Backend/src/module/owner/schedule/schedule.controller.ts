@@ -1,44 +1,42 @@
 import { Response, NextFunction } from "express";
-import { StatusCodes } from "http-status-codes";
-import { ScheduleService } from "./schedule.service";
-import { successResponse } from "../../../utils/helpers/response";
-import { AuthRequest } from "../../../middlewares/types";
-import { SCHEDULE_MESSAGES } from "../../../constants/messages";
+import type { AuthRequest }       from "../../../middlewares/types";
+import { ScheduleService }        from "./schedule.service";
+import { successResponse }        from "../../../utils/helpers/response";
 
 export class ScheduleController {
 
-  static getSchedule = async (req: AuthRequest, res: Response, next: NextFunction): Promise<void> => {
+  static async getSchedule(req: AuthRequest, res: Response, next: NextFunction) {
     try {
-      const schedule = await ScheduleService.getSchedule(req.params.businessId, req.user!.userId);
-      res.status(StatusCodes.OK).json(successResponse(schedule));
+      const data = await ScheduleService.getSchedule(req.user!.userId, req.params.businessId);
+      res.json(successResponse(data));
     } catch (err) { next(err); }
-  };
+  }
 
-  static updateSchedule = async (req: AuthRequest, res: Response, next: NextFunction): Promise<void> => {
+  static async updateSchedule(req: AuthRequest, res: Response, next: NextFunction) {
     try {
-      const schedule = await ScheduleService.updateSchedule(req.params.businessId, req.user!.userId, req.body.schedules);
-      res.status(StatusCodes.OK).json(successResponse(schedule, SCHEDULE_MESSAGES.UPDATED));
+      const data = await ScheduleService.updateSchedule(req.user!.userId, req.params.businessId, req.body);
+      res.json(successResponse(data, "Schedule updated successfully."));
     } catch (err) { next(err); }
-  };
+  }
 
-  static getHolidays = async (req: AuthRequest, res: Response, next: NextFunction): Promise<void> => {
+  static async getHolidays(req: AuthRequest, res: Response, next: NextFunction) {
     try {
-      const holidays = await ScheduleService.getHolidays(req.params.businessId, req.user!.userId);
-      res.status(StatusCodes.OK).json(successResponse(holidays));
+      const data = await ScheduleService.getHolidays(req.user!.userId, req.params.businessId);
+      res.json(successResponse(data));
     } catch (err) { next(err); }
-  };
+  }
 
-  static createHoliday = async (req: AuthRequest, res: Response, next: NextFunction): Promise<void> => {
+  static async createHoliday(req: AuthRequest, res: Response, next: NextFunction) {
     try {
-      const holiday = await ScheduleService.createHoliday(req.params.businessId, req.user!.userId, req.body);
-      res.status(StatusCodes.CREATED).json(successResponse(holiday, SCHEDULE_MESSAGES.HOLIDAY_CREATED));
+      const data = await ScheduleService.createHoliday(req.user!.userId, req.params.businessId, req.body);
+      res.status(201).json(successResponse(data, "Holiday created successfully."));
     } catch (err) { next(err); }
-  };
+  }
 
-  static deleteHoliday = async (req: AuthRequest, res: Response, next: NextFunction): Promise<void> => {
+  static async deleteHoliday(req: AuthRequest, res: Response, next: NextFunction) {
     try {
-      await ScheduleService.deleteHoliday(req.params.businessId, req.params.holidayId, req.user!.userId);
-      res.status(StatusCodes.OK).json(successResponse(null, SCHEDULE_MESSAGES.HOLIDAY_DELETED));
+      await ScheduleService.deleteHoliday(req.user!.userId, req.params.businessId, req.params.holidayId);
+      res.json(successResponse(null, "Holiday deleted successfully."));
     } catch (err) { next(err); }
-  };
+  }
 }

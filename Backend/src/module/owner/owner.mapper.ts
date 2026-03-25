@@ -1,50 +1,21 @@
-import { OwnerProfile } from "./owner.types";
+import { formatInTimeZone } from "date-fns-tz";
+import type { OwnerProfile } from "./owner.types";
 
-function generateDefaultAvatar(name: string): string {
-  const initials = name
-    .split(" ")
-    .map((n) => n[0])
-    .join("")
-    .toUpperCase()
-    .slice(0, 2);
+const IST = "Asia/Kolkata";
 
-  return `https://ui-avatars.com/api/?name=${encodeURIComponent(initials)}&background=random&color=fff&size=200`;
+export function toOwnerProfile(owner: any): OwnerProfile {
+  return {
+    id:                owner.id,
+    name:              owner.name,
+    email:             owner.user?.email ?? "",
+    phone:             owner.phone        ?? null,
+    avatar_url:        owner.avatar_url   ?? null,
+    city:              owner.city         ?? null,
+    state:             owner.state        ?? null,
+    address_line1:     owner.address_line1 ?? null,
+    address_line2:     owner.address_line2 ?? null,
+    join_date:         formatInTimeZone(owner.created_at, IST, "yyyy-MM-dd"),
+    total_businesses:  owner.total_businesses  ?? 0,
+    active_businesses: owner.active_businesses ?? 0,
+  };
 }
-
-export const toOwnerProfile = (
-  user: { email: string; is_active: boolean },
-  owner: {
-    id: string;
-    name: string;
-    phone: string;
-    avatar_url: string | null;
-    city: string;
-    state: string;
-    is_verified: boolean;
-    total_businesses: number;
-    active_businesses: number;
-    total_staff: number;
-    total_bookings: number;
-    lifetime_earnings: number;
-    created_at: Date;
-    updated_at: Date;
-  }
-): OwnerProfile => ({
-  id:                owner.id,
-  email:             user.email,
-  name:              owner.name,
-  phone:             owner.phone,
-  avatar_url:        owner.avatar_url ?? generateDefaultAvatar(owner.name),
-  city:              owner.city,
-  state:             owner.state,
-  role:              "OWNER",
-  is_active:         user.is_active,
-  is_verified:       owner.is_verified,
-  total_businesses:  owner.total_businesses,
-  active_businesses: owner.active_businesses,
-  total_staff:       owner.total_staff,
-  total_bookings:    owner.total_bookings,
-  lifetime_earnings: owner.lifetime_earnings,
-  created_at:         owner.created_at,
-  updated_at:         owner.updated_at,
-});

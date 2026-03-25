@@ -1,42 +1,51 @@
 import { Response, NextFunction } from "express";
-import { StatusCodes } from "http-status-codes";
+import type { AuthRequest } from "../../../middlewares/types";
 import { BusinessServicesService } from "./business-services.service";
 import { successResponse } from "../../../utils/helpers/response";
-import { AuthRequest } from "../../../middlewares/types";
-import { BUSINESS_MESSAGES } from "../../../constants/messages";
 
 export class BusinessServicesController {
 
-  static list = async (req: AuthRequest, res: Response, next: NextFunction): Promise<void> => {
+  static async getAll(req: AuthRequest, res: Response, next: NextFunction) {
     try {
-      const services = await BusinessServicesService.list(req.params.businessId, req.user!.userId);
-      res.status(StatusCodes.OK).json(successResponse(services));
-    } catch (err) { next(err); }
-  };
-
-  static add = async (req: AuthRequest, res: Response, next: NextFunction): Promise<void> => {
-    try {
-      const service = await BusinessServicesService.add(req.params.businessId, req.user!.userId, req.body);
-      res.status(StatusCodes.CREATED).json(successResponse(service, BUSINESS_MESSAGES.SERVICE_ADDED));
-    } catch (err) { next(err); }
-  };
-
-  static update = async (req: AuthRequest, res: Response, next: NextFunction): Promise<void> => {
-    try {
-      const service = await BusinessServicesService.update(
-        req.params.businessId,
-        req.params.offeringId,
+      const data = await BusinessServicesService.getAll(
         req.user!.userId,
-        req.body
+        req.params.businessId,
       );
-      res.status(StatusCodes.OK).json(successResponse(service, BUSINESS_MESSAGES.SERVICE_UPDATED));
+      res.json(successResponse(data));
     } catch (err) { next(err); }
-  };
+  }
 
-  static remove = async (req: AuthRequest, res: Response, next: NextFunction): Promise<void> => {
+  static async add(req: AuthRequest, res: Response, next: NextFunction) {
     try {
-      await BusinessServicesService.remove(req.params.businessId, req.params.offeringId, req.user!.userId);
-      res.status(StatusCodes.OK).json(successResponse(null, BUSINESS_MESSAGES.SERVICE_REMOVED));
+      const data = await BusinessServicesService.add(
+        req.user!.userId,
+        req.params.businessId,
+        req.body,
+      );
+      res.status(201).json(successResponse(data, "Service added successfully."));
     } catch (err) { next(err); }
-  };
+  }
+
+  static async update(req: AuthRequest, res: Response, next: NextFunction) {
+    try {
+      const data = await BusinessServicesService.update(
+        req.user!.userId,
+        req.params.businessId,
+        req.params.serviceId,
+        req.body,
+      );
+      res.json(successResponse(data, "Service updated successfully."));
+    } catch (err) { next(err); }
+  }
+
+  static async remove(req: AuthRequest, res: Response, next: NextFunction) {
+    try {
+      await BusinessServicesService.remove(
+        req.user!.userId,
+        req.params.businessId,
+        req.params.serviceId,
+      );
+      res.json(successResponse(null, "Service removed successfully."));
+    } catch (err) { next(err); }
+  }
 }

@@ -1,35 +1,58 @@
 export interface OwnerProfile {
-  id: string;
-  email: string;
-  name: string;
-  phone: string;
-  avatar_url: string;
-  city: string;
-  state: string;
-  role: 'OWNER';
-  is_active: boolean;
-  is_verified: boolean;
+  id:               string;
+  name:             string;
+  email:            string;
+  phone:            string | null;
+  avatar_url:       string | null;
+  city:             string | null;
+  state:            string | null;
+  address_line1:    string | null;
+  address_line2:    string | null;
+  join_date:        string;           
   total_businesses: number;
   active_businesses: number;
-  total_staff: number;
-  total_bookings: number;
-  lifetime_earnings: number;
-  created_at: Date;
-  updated_at: Date;
 }
 
 export interface UpdateOwnerProfileDTO {
-  name?: string;
-  phone?: string;
-  city?: string;
-  state?: string;
-  avatar?: string;
+  name?:          string;
+  phone?:         string;
+  city?:          string;
+  state?:         string;
+  address_line1?: string;
+  address_line2?: string;
 }
 
-export interface UpdateOwnerProfileRepoDTO {
-  name?: string;
-  phone?: string;
-  city?: string;
-  state?: string;
-  avatar_url?: string;
+export interface BusinessCardDTO {
+  id:                string;
+  business_name:     string;
+  slug:              string;
+  city:              string;
+  state:             string;
+  service_for:       string;
+  primary_image:     string | null;
+  logo_url:          string | null;
+  is_verified:       boolean;
+  is_active:         boolean;
+  average_rating:    number;
+  total_reviews:     number;
+  active_staff_count: number;
+  total_earning_inr: number;           
+  today_bookings:    number;
+  created_at:        string;           
+}
+
+export interface MyBusinessesResponseDTO {
+  businesses:  BusinessCardDTO[];
+  total:       number;
+  page:        number;
+  limit:       number;
+  total_pages: number;
+}
+
+export interface MyBusinessesFilters {
+  name?:   string;
+  city?:   string;
+  state?:  string;
+  page?:   number;
+  limit?:  number;
 }

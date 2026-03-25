@@ -1,11 +1,18 @@
 import { prisma } from "../../config/prisma";
-import { UpdateOwnerProfileRepoDTO } from "./owner.types";
 
 export class OwnerRepository {
+
   static async findByUserId(userId: string) {
     return prisma.owner.findUnique({
-      where: { user_id: userId },
-      include: { user: true },
+      where:   { user_id: userId },
+      include: { user: { select: { id: true, email: true } } },
+    });
+  }
+
+  static async findById(id: string) {
+    return prisma.owner.findUnique({
+      where:   { id },
+      include: { user: { select: { id: true, email: true } } },
     });
   }
 
@@ -13,16 +20,26 @@ export class OwnerRepository {
     return prisma.owner.findFirst({ where: { phone } });
   }
 
-  static async updateProfile(ownerId: string, data: UpdateOwnerProfileRepoDTO) {
+  static async updateProfile(
+    id:   string,
+    data: {
+      name?:          string;
+      phone?:         string;
+      city?:          string;
+      state?:         string;
+      address_line1?: string;
+      address_line2?: string;
+      avatar_url?:    string;
+    }
+  ) {
+    const payload: Record<string, any> = {};
+    for (const [k, v] of Object.entries(data)) {
+      if (v !== undefined) payload[k] = v;
+    }
     return prisma.owner.update({
-      where: { id: ownerId },
-      data: {
-        ...(data.name       !== undefined && { name:       data.name }),
-        ...(data.phone      !== undefined && { phone:      data.phone }),
-        ...(data.city       !== undefined && { city:       data.city }),
-        ...(data.state      !== undefined && { state:      data.state }),
-        ...(data.avatar_url !== undefined && { avatar_url: data.avatar_url }),
-      },
+      where:   { id },
+      data:    payload,
+      include: { user: { select: { id: true, email: true } } },
     });
   }
 }

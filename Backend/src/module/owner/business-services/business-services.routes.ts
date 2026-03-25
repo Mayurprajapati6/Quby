@@ -1,13 +1,25 @@
-import express from "express";
+import { Router } from "express";
 import { BusinessServicesController } from "./business-services.controller";
 import { validateRequestBody } from "../../../validators";
-import { addBusinessServiceSchema, updateBusinessServiceSchema } from "../../../validators/business-services.validator";
+import {
+  addBusinessServiceSchema,
+  updateBusinessServiceSchema,
+} from "../../../validators/business-services.validator";
 
-const router = express.Router({ mergeParams: true });
+export const businessServicesRouter = Router({ mergeParams: true });
 
-router.get("/",BusinessServicesController.list);
-router.post("/",validateRequestBody(addBusinessServiceSchema), BusinessServicesController.add);
-router.patch("/:offeringId",validateRequestBody(updateBusinessServiceSchema), BusinessServicesController.update);
-router.delete("/:offeringId",BusinessServicesController.remove);
+businessServicesRouter.get("/", BusinessServicesController.getAll);
 
-export default router;
+businessServicesRouter.post(
+  "/",
+  validateRequestBody(addBusinessServiceSchema),
+  BusinessServicesController.add,
+);
+
+businessServicesRouter.patch(
+  "/:serviceId",
+  validateRequestBody(updateBusinessServiceSchema),
+  BusinessServicesController.update,
+);
+
+businessServicesRouter.delete("/:serviceId", BusinessServicesController.remove);
