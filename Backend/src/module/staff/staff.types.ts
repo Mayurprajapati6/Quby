@@ -1,8 +1,7 @@
-export interface StaffProfile {
+export interface StaffProfileDTO {
   id:               string;
-  userId:           string;
-  email:            string;
   name:             string;
+  email:            string;
   phone:            string;
   avatar_url:       string | null;
   bio:              string | null;
@@ -10,43 +9,36 @@ export interface StaffProfile {
   experience_years: number | null;
   is_active:        boolean;
   is_verified:      boolean;
-  average_rating:   number | null;
+  average_rating:   number;
   total_reviews:    number;
-  current_service_streak: number;
-  longest_service_streak: number;
+  current_streak:   number;
+  longest_streak:   number;
   business: {
     id:            string;
-    name:          string;
-    business_type: string;
-    city:          string;
-    state:         string;
+    business_name: string;
+    logo_url:      string | null;
   };
-  services:  StaffServiceItem[];
-  schedule:  StaffScheduleItem[];
-  createdAt: Date;
-  updatedAt: Date;
+  services: Array<{
+    id:                  string;
+    service_offering_id: string;
+    service_name:        string;
+    duration_minutes:    number;
+    is_available:        boolean;
+  }>;
+  schedules: Array<{
+    id:           string;
+    day_of_week:  string;
+    is_available: boolean;
+    start_time:   string | null;
+    end_time:     string | null;
+  }>;
+  created_at: Date;
 }
 
-export interface StaffServiceItem {
-  id:               string;
-  service_name:     string;
-  duration_minutes: number;
-  price:            number;
-  is_available:     boolean;
-}
-
-export interface StaffScheduleItem {
-  day_of_week:  string;
-  is_available: boolean;
-  start_time:   string | null;
-  end_time:     string | null;
-}
 export interface UpdateStaffProfileDTO {
+  name?:             string;
+  phone?:            string;
   bio?:              string;
-  experience_years?: number;
-}
-export interface UpdateStaffProfileRepoDTO {
-  avatar_url?:       string;
-  bio?:              string;
+  specialization?:   string;
   experience_years?: number;
 }
