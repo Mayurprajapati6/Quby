@@ -1,11 +1,28 @@
 import { prisma } from "../../config/prisma";
-import { UpdateCustomerProfileRepoDTO } from "./customer.types";
 
 export class CustomerRepository {
+
   static async findByUserId(userId: string) {
     return prisma.customer.findUnique({
-      where: { user_id: userId },
-      include: { user: true },
+      where:   { user_id: userId },
+      include: {
+        user: {
+          select: {
+            id:            true,
+            email:         true,
+            last_login_at: true,
+            is_suspended:  true,
+            created_at:    true,
+          },
+        },
+      },
+    });
+  }
+
+  static async findById(customerId: string) {
+    return prisma.customer.findUnique({
+      where:   { id: customerId },
+      include: { user: { select: { email: true, last_login_at: true } } },
     });
   }
 
@@ -13,16 +30,35 @@ export class CustomerRepository {
     return prisma.customer.findFirst({ where: { phone } });
   }
 
-  static async updateProfile(customerId: string, data: UpdateCustomerProfileRepoDTO) {
+  static async findByUsername(username: string) {
+    return prisma.customer.findUnique({ where: { username } });
+  }
+
+  static async updateProfile(
+    customerId: string,
+    data: {
+      name?:          string;
+      phone?:         string | null;
+      city?:          string;
+      state?:         string;
+      gender?:        string | null;
+      avatar_url?:    string;
+      address_line1?: string | null;
+      address_line2?: string | null;
+    }
+  ) {
     return prisma.customer.update({
       where: { id: customerId },
-      data: {
-        ...(data.name      !== undefined && { name:       data.name }),
-        ...(data.phone     !== undefined && { phone:      data.phone }),
-        ...(data.city      !== undefined && { city:       data.city }),
-        ...(data.state     !== undefined && { state:      data.state }),
-        ...(data.gender    !== undefined && { gender:     data.gender }),
-        ...(data.avatar_url !== undefined && { avatar_url: data.avatar_url }),
+      data,
+      include: {
+        user: {
+          select: {
+            id:            true,
+            email:         true,
+            last_login_at: true,
+            created_at:    true,
+          },
+        },
       },
     });
   }
