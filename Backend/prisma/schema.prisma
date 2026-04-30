@@ -7,7 +7,6 @@ datasource db {
   provider = "postgresql"
 }
 
-
 enum UserRole {
   CUSTOMER
   STAFF
@@ -38,11 +37,13 @@ enum DayOfWeek {
 enum BookingStatus {
   PENDING_PAYMENT
   CONFIRMED
-  CHECKED_IN
   RUNNING
   COMPLETED
   CANCELLED
   NO_SHOW
+  EXPIRED
+  REFUND_INITIATED
+  REFUNDED
 }
 
 enum PaymentStatus {
@@ -50,6 +51,7 @@ enum PaymentStatus {
   PAID
   SETTLED
   REFUNDED
+  FAILED
 }
 
 enum RefundStatus {
@@ -65,27 +67,20 @@ enum LeaveStatus {
   REJECTED
 }
 
-enum AttendanceStatus {
-  PRESENT
-  ABSENT
-  HALF_DAY
-  LEAVE
-  HOLIDAY
+enum CancelledBy {
+  CUSTOMER
+  OWNER
+  SYSTEM
 }
 
-enum AttendanceSource {
-  BOOKING
-  BUSINESS_MANUAL
-  LEAVE_SYSTEM
-  HOLIDAY_SYSTEM
-}
 
 enum BookingEventType {
   BOOKING_CREATED
   PAYMENT_PAID
+  PAYMENT_FAILED
+  PAYMENT_TIMEOUT
   BOOKING_CONFIRMED
   CUSTOMER_REMINDED
-  CUSTOMER_CHECKED_IN
   SERVICE_STARTED
   SERVICE_COMPLETED
   SERVICE_DELAYED
@@ -93,6 +88,8 @@ enum BookingEventType {
   BOOKING_NO_SHOW
   PAYMENT_SETTLED
   PAYMENT_REFUNDED
+  REFUND_INITIATED
+  REFUND_COMPLETED
 }
 
 enum QrStatus {
@@ -112,8 +109,10 @@ enum CustomerNotificationType {
   SERVICE_DELAYED
   QUEUE_SHIFTED
   BOOKING_CANCELLED
-  REFUND_PROCESSED
   REVIEW_REQUEST
+  REFUND_INITIATED
+  REFUND_COMPLETED
+  BOOKING_NO_SHOW
 }
 
 enum BusinessNotificationType {
@@ -129,18 +128,20 @@ enum BusinessNotificationType {
   SERVICE_DELAYED
   SERVICE_EXTENDED
   QUEUE_SHIFTED
-  CUSTOMER_NO_SHOW
+  BOOKING_NO_SHOW
   HOLIDAY_CREATED
   REVIEW_RECEIVED
   STAFF_INVITE_EXPIRED
   STAFF_INVITE_RESENT
+  BOOKING_COMPLETED
+  SERVICE_CHECKED_IN
 }
 
 enum StaffNotificationType {
   NEW_BOOKING
   BOOKING_CONFIRMED
   BOOKING_CANCELLED
-  CUSTOMER_CHECKED_IN
+  SERVICE_STARTED   
   NEXT_CUSTOMER_READY
   LEAVE_APPROVED
   LEAVE_REJECTED
@@ -153,6 +154,8 @@ enum StaffNotificationType {
   ACCOUNT_SUSPENDED
   SERVICE_DELAYED
   SERVICE_EXTENDED
+  BOOKING_NO_SHOW
+  SERVICE_COMPLETED
 }
 
 model User {
@@ -263,10 +266,6 @@ model Customer {
   cancelled_bookings Int @default(0)
   total_spent        Int @default(0)
 
-  current_streak    Int       @default(0)
-  longest_streak    Int       @default(0)
-  last_booking_date DateTime? @db.Timestamptz(3)
-
   created_at DateTime @default(now()) @db.Timestamptz(3)
   updated_at DateTime @updatedAt @db.Timestamptz(3)
 
@@ -275,28 +274,12 @@ model Customer {
   reviews       Review[]
   notifications CustomerNotification[]
   payments      Payment[]
-  favourites    CustomerFavourite[]
 
   @@index([user_id])
   @@index([username])
   @@index([city, state])
   @@index([phone])
   @@map("customers")
-}
-
-model CustomerFavourite {
-  id          String @id @default(uuid())
-  customer_id String
-  business_id String
-
-  created_at DateTime @default(now()) @db.Timestamptz(3)
-
-  customer Customer @relation(fields: [customer_id], references: [id], onDelete: Cascade)
-  business Business @relation(fields: [business_id], references: [id], onDelete: Cascade)
-
-  @@unique([customer_id, business_id])
-  @@index([customer_id])
-  @@map("customer_favourites")
 }
 
 model CustomerNotification {
@@ -395,6 +378,7 @@ model Business {
 
   is_verified Boolean @default(true)
   is_active   Boolean @default(true)
+  
 
   break_time_minutes        Int @default(5)
   cancellation_window_hours Int @default(2)
@@ -414,7 +398,6 @@ model Business {
   holidays      Holiday[]
   images        BusinessImage[]
   notifications BusinessNotification[]
-  favourites    CustomerFavourite[]
 
   @@index([owner_id])
   @@index([slug])
@@ -540,10 +523,6 @@ model Staff {
   average_rating Float? @default(0)
   total_reviews  Int    @default(0)
 
-  current_service_streak Int       @default(0)
-  longest_service_streak Int       @default(0)
-  last_service_date      DateTime? @db.Timestamptz(3)
-
   created_at DateTime @default(now()) @db.Timestamptz(3)
   updated_at DateTime @updatedAt @db.Timestamptz(3)
 
@@ -558,7 +537,7 @@ model Staff {
   reviews        Review[]
   staff_holidays StaffHoliday[]
   notifications  StaffNotification[]
-  attendance     StaffAttendance[]
+  //attendance     StaffAttendance[]
   performance    StaffPerformance[]
   scan_logs      QrScanLog[]
 
@@ -629,33 +608,6 @@ model StaffLeave {
   @@map("staff_leaves")
 }
 
-model StaffAttendance {
-  id          String @id @default(uuid())
-  staff_id    String
-  business_id String
-
-  date   DateTime         @db.Date
-  status AttendanceStatus @default(PRESENT)
-
-  source AttendanceSource @default(BUSINESS_MANUAL)
-
-  check_in_time  DateTime? @db.Timestamptz(3)
-  check_out_time DateTime? @db.Timestamptz(3)
-
-  marked_by      String?
-  is_auto_marked Boolean @default(false)
-  notes          String? @db.Text
-
-  created_at DateTime @default(now()) @db.Timestamptz(3)
-  updated_at DateTime @updatedAt @db.Timestamptz(3)
-
-  staff Staff @relation(fields: [staff_id], references: [id], onDelete: Cascade)
-
-  @@unique([staff_id, date])
-  @@index([staff_id, date])
-  @@index([business_id, date])
-  @@map("staff_attendance")
-}
 
 model StaffPerformance {
   id       String   @id @default(uuid())
@@ -810,6 +762,7 @@ model Booking {
 
   booking_number  String @unique @db.VarChar(20)
   idempotency_key String @unique @db.VarChar(100)
+  reservation_token String?
 
   customer_id String
   business_id String
@@ -818,13 +771,8 @@ model Booking {
   service_date DateTime @db.Date
   queue_number Int
 
-  arrival_window_start DateTime @db.Timestamptz(3)
-  arrival_window_end   DateTime @db.Timestamptz(3)
-  service_start_time   DateTime @db.Timestamptz(3)
-  service_end_time     DateTime @db.Timestamptz(3)
 
-  scan_window_start DateTime @db.Timestamptz(3)
-  scan_window_end   DateTime @db.Timestamptz(3)
+  service_start_time   DateTime @db.Timestamptz(3)
 
   checked_in_at        DateTime? @db.Timestamptz(3)
   service_started_at   DateTime? @db.Timestamptz(3)
@@ -841,16 +789,19 @@ model Booking {
 
   status BookingStatus @default(PENDING_PAYMENT)
 
+  is_visible Boolean @default(true)
+
   cancellable_until    DateTime? @db.Timestamptz(3)
   payment_confirmed_at DateTime? @db.Timestamptz(3)
 
   cancelled_at        DateTime? @db.Timestamptz(3)
-  cancelled_by        String?   @db.VarChar(20)
+  cancelled_by        CancelledBy? 
   cancellation_reason String?   @db.Text
 
   notes String? @db.Text
 
   version Int @default(1)
+  total_delay Int @default(0)
 
   created_at DateTime @default(now()) @db.Timestamptz(3)
   updated_at DateTime @updatedAt @db.Timestamptz(3)
@@ -1026,7 +977,7 @@ model Review {
   business_id String
   staff_id    String
 
-  rating  Int            
+  rating  Int
   comment String? @db.Text
 
   images Json? @db.JsonB
@@ -1052,19 +1003,4 @@ model Review {
   @@map("reviews")
 }
 
-model PlatformConfig {
-  id String @id @default(uuid())
-
-  key   String @unique @db.VarChar(100)
-  value String @db.VarChar(255)
-
-  description String? @db.Text
-  updated_by  String?
-
-  created_at DateTime @default(now()) @db.Timestamptz(3)
-  updated_at DateTime @updatedAt @db.Timestamptz(3)
-
-  @@index([key])
-  @@map("platform_configs")
-}
 

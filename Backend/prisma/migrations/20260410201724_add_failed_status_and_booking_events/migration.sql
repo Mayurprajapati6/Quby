@@ -6,5 +6,9 @@
 -- the enum.
 
 
-ALTER TYPE "BusinessNotificationType" ADD VALUE 'STAFF_INVITE_EXPIRED';
-ALTER TYPE "BusinessNotificationType" ADD VALUE 'STAFF_INVITE_RESENT';
+ALTER TYPE "BookingEventType" ADD VALUE 'PAYMENT_FAILED';
+ALTER TYPE "BookingEventType" ADD VALUE 'PAYMENT_TIMEOUT';
+ALTER TYPE "BookingEventType" ADD VALUE 'NO_SHOW';
+
+-- AlterEnum
+ALTER TYPE "PaymentStatus" ADD VALUE 'FAILED';
