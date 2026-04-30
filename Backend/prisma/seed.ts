@@ -55,11 +55,6 @@ async function seedPlatformConfig() {
       description: "Minutes a customer has to scan their QR code after arriving",
     },
     {
-      key:         "ESCROW_RELEASE_DELAY_MINUTES",
-      value:       "5",
-      description: "Minutes after service completion before escrow is released to the business",
-    },
-    {
       key:         "CANCELLATION_WINDOW_HOURS",
       value:       "4",
       description: "Hours before service start within which a cancellation qualifies for a full refund",
