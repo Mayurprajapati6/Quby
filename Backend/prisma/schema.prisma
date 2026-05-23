@@ -817,6 +817,7 @@ model Booking {
   scan_logs QrScanLog[]
 
   @@unique([staff_id, service_date, queue_number], name: "unique_queue_position")
+  @@unique([staff_id, service_date, service_start_time], name: "unique_staff_slot")
   @@index([customer_id, created_at])
   @@index([staff_id, service_date])
   @@index([business_id, service_date])
