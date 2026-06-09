@@ -1,9 +1,9 @@
 export interface JwtPayload {
-  userId:      string;
-  role:        "CUSTOMER" | "STAFF" | "OWNER" | "ADMIN" | "BUSINESS";
-  version:     number;
-  entityId?:   string;
-  businessId?: string;
+  userId:  string;
+  role:    "CUSTOMER" | "STAFF" | "OWNER" | "ADMIN";
+  version: number;
+  entityId: string;
+  businessId?: string; 
 }
 
 export interface UserSignupDTO {
@@ -46,11 +46,11 @@ export interface DeleteAccountDTO {
 }
 
 export interface MinimalUserInfo {
-  id:          string;
-  email:       string;
-  name:        string;
-  role:        "CUSTOMER" | "STAFF" | "OWNER" | "ADMIN" | "BUSINESS";
-  businessId?: string;
+  id:         string;
+  email:      string;
+  name:       string;
+  role:       "CUSTOMER" | "STAFF" | "OWNER" | "ADMIN";
+  avatar_url: string | null;
 }
 
 export interface TokenResult {

@@ -64,9 +64,9 @@ export class AuthRepository {
   static async isUserSuspended(userId: string): Promise<boolean> {
     const user = await prisma.user.findUnique({
       where:  { id: userId },
-      select: { is_suspended: true },
+      select: { is_active: true },
     });
-    return user?.is_suspended ?? false;
+    return !(user?.is_active ?? true);
   }
 
   static async checkUsernameExists(username: string): Promise<boolean> {
@@ -88,11 +88,6 @@ export class AuthRepository {
     });
   }
 
-  static async createCustomerWallet(customerId: string) {
-    return prisma.customerWallet.create({
-      data: { customer_id: customerId, balance: 0, currency: "INR" },
-    });
-  }
 
   static async findCustomerByUserId(userId: string) {
     return prisma.customer.findUnique({ where: { user_id: userId } });
@@ -129,21 +124,6 @@ export class AuthRepository {
     return prisma.admin.findUnique({ where: { user_id: userId } });
   }
 
-  static async findBusinessByAuthUserId(userId: string) {
-    return prisma.business.findUnique({
-      where:  { auth_user_id: userId },
-      select: {
-        id:            true,
-        business_name: true,
-        is_active:     true,
-        owner: {
-          select: {
-            user: { select: { is_suspended: true } },
-          },
-        },
-      },
-    });
-  }
 
   static async createBusinessAuthUser(data: CreateBusinessAuthUserDTO) {
     const passwordHash = await hashPassword(data.password);
@@ -158,12 +138,6 @@ export class AuthRepository {
     });
   }
 
-  static async linkAuthUserToBusiness(businessId: string, authUserId: string) {
-    return prisma.business.update({
-      where: { id: businessId },
-      data:  { auth_user_id: authUserId },
-    });
-  }
 
   static async saveRefreshToken(data: SaveRefreshTokenDTO) {
     return prisma.refreshToken.create({

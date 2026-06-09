@@ -1,7 +1,9 @@
-import { Request, Response, NextFunction } from "express";
-import { AuthService } from "./auth.service";
-import { successResponse } from "../../utils/helpers/response";
-import type { AuthRequest } from "../../middlewares/types";
+import { Request, Response, NextFunction } from 'express';
+import { AuthService } from './auth.service';
+import { AuthRepository } from './auth.repository';
+import { successResponse } from '../../utils/helpers/response';
+import type { AuthRequest } from '../../middlewares/types';
+import { prisma } from '../../config/prisma';
 import {
   registerSchema,
   loginSchema,
@@ -11,7 +13,19 @@ import {
   changePasswordSchema,
   staffSetupSchema,
   deleteAccountSchema,
-} from "./auth.validator";
+} from './auth.validator';
+
+async function fetchAvatar(userId: string, role: string): Promise<string> {
+  try {
+    const sel = { avatar_url: true } as const;
+    let row: { avatar_url: string | null } | null = null;
+    if      (role === 'CUSTOMER') row = await prisma.customer.findUnique({ where: { user_id: userId }, select: sel });
+    else if (role === 'OWNER')    row = await prisma.owner.findUnique(   { where: { user_id: userId }, select: sel });
+    else if (role === 'STAFF')    row = await prisma.staff.findUnique(   { where: { user_id: userId }, select: sel });
+    else if (role === 'ADMIN')    row = await prisma.admin.findUnique(   { where: { user_id: userId }, select: sel });
+    return row?.avatar_url ?? '';
+  } catch { return ''; }
+}
 
 export class AuthController {
 
@@ -19,15 +33,23 @@ export class AuthController {
     try {
       const dto    = registerSchema.parse(req.body);
       const result = await AuthService.signup(dto);
-      res.status(201).json(successResponse(result, "Account created successfully."));
+
+      const avatarUrl = await fetchAvatar(result.user.id, result.user.role);
+      res.locals.reqtrolUser = { userId: result.user.id, userName: result.user.name, avatarUrl };
+
+      res.status(201).json(successResponse(result, 'Account created successfully.'));
     } catch (err) { next(err); }
   }
 
   static async login(req: Request, res: Response, next: NextFunction) {
     try {
       const dto    = loginSchema.parse(req.body);
-      const meta   = { ipAddress: req.ip, userAgent: req.headers["user-agent"] };
+      const meta   = { ipAddress: req.ip, userAgent: req.headers['user-agent'] };
       const result = await AuthService.login(dto, meta);
+
+      const avatarUrl = await fetchAvatar(result.user.id, result.user.role);
+      res.locals.reqtrolUser = { userId: result.user.id, userName: result.user.name, avatarUrl };
+
       res.json(successResponse(result));
     } catch (err) { next(err); }
   }
@@ -35,7 +57,7 @@ export class AuthController {
   static async refresh(req: Request, res: Response, next: NextFunction) {
     try {
       const { refresh_token } = refreshTokenSchema.parse(req.body);
-      const meta   = { ipAddress: req.ip, userAgent: req.headers["user-agent"] };
+      const meta   = { ipAddress: req.ip, userAgent: req.headers['user-agent'] };
       const tokens = await AuthService.refreshAccessToken(refresh_token, meta);
       res.json(successResponse(tokens));
     } catch (err) { next(err); }
@@ -45,7 +67,7 @@ export class AuthController {
     try {
       const { refresh_token } = req.body;
       if (refresh_token) await AuthService.logout(refresh_token);
-      res.json(successResponse(null, "Logged out successfully."));
+      res.json(successResponse(null, 'Logged out successfully.'));
     } catch (err) { next(err); }
   }
 
@@ -53,7 +75,8 @@ export class AuthController {
     try {
       const { email } = forgotPasswordSchema.parse(req.body);
       await AuthService.forgotPassword({ email });
-      res.json(successResponse(null, "If that email is registered, a reset link has been sent."));
+      
+      res.json(successResponse(null, 'If that email is registered, a reset link has been sent.'));
     } catch (err) { next(err); }
   }
 
@@ -61,16 +84,16 @@ export class AuthController {
     try {
       const dto = resetPasswordSchema.parse(req.body);
       await AuthService.resetPassword(dto);
-      res.json(successResponse(null, "Password reset successfully. Please log in."));
+      res.json(successResponse(null, 'Password reset successfully. Please log in.'));
     } catch (err) { next(err); }
   }
 
   static async staffSetup(req: Request, res: Response, next: NextFunction) {
     try {
       const dto    = staffSetupSchema.parse(req.body);
-      const meta   = { ipAddress: req.ip, userAgent: req.headers["user-agent"] };
+      const meta   = { ipAddress: req.ip, userAgent: req.headers['user-agent'] };
       const result = await AuthService.staffSetup(dto, meta);
-      res.json(successResponse(result, "Account setup complete. Welcome!"));
+      res.json(successResponse(result, 'Account setup complete. Welcome!'));
     } catch (err) { next(err); }
   }
 
@@ -78,7 +101,7 @@ export class AuthController {
     try {
       const dto = changePasswordSchema.parse(req.body);
       await AuthService.changePassword(req.user!.userId, dto);
-      res.json(successResponse(null, "Password changed successfully."));
+      res.json(successResponse(null, 'Password changed successfully.'));
     } catch (err) { next(err); }
   }
 
@@ -86,7 +109,7 @@ export class AuthController {
     try {
       const { password } = deleteAccountSchema.parse(req.body);
       await AuthService.deleteAccount(req.user!.userId, password);
-      res.json(successResponse(null, "Account deleted successfully."));
+      res.json(successResponse(null, 'Account deleted successfully.'));
     } catch (err) { next(err); }
   }
 }
