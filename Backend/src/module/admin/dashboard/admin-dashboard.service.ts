@@ -6,11 +6,11 @@ import {
   subMonths,
 } from "date-fns";
 
-const IST    = "Asia/Kolkata";
+const TZ     = "Asia/Kolkata";
 const MONTHS = ["Jan","Feb","Mar","Apr","May","Jun","Jul","Aug","Sep","Oct","Nov","Dec"];
 
-function toISTDate(d: Date) { return formatInTimeZone(d, IST, "yyyy-MM-dd"); }
-function istMonthKey(d: Date) { return formatInTimeZone(d, IST, "yyyy-MM"); }
+function toTZDate(d: Date) { return formatInTimeZone(d, TZ, "yyyy-MM-dd"); }
+function tzMonthKey(d: Date) { return formatInTimeZone(d, TZ, "yyyy-MM"); }
 
 function periodBounds(period: "week" | "month" | "year") {
   const now = new Date();
@@ -24,10 +24,10 @@ function buildMonthBuckets() {
   const now = new Date();
   for (let i = 11; i >= 0; i--) {
     const d   = subMonths(startOfMonth(now), i);
-    const key = formatInTimeZone(d, IST, "yyyy-MM");
+    const key = formatInTimeZone(d, TZ, "yyyy-MM");
     map.set(key, {
-      label:       MONTHS[parseInt(formatInTimeZone(d, IST, "MM")) - 1],
-      year:        parseInt(formatInTimeZone(d, IST, "yyyy")),
+      label:       MONTHS[parseInt(formatInTimeZone(d, TZ, "MM")) - 1],
+      year:        parseInt(formatInTimeZone(d, TZ, "yyyy")),
       revenue_inr: 0,
       count:       0,
     });
@@ -45,49 +45,46 @@ export class AdminDashboardService {
 
     const [
       userCounts,
-      [allBusinesses, newBusinesses, pendingVerification],
+      [allBusinesses, newBusinesses],
       todayActivity,
-      [feeToday, feePeriod, feeAllTime, refundsMonth, feeMonth],
+      [revToday, revPeriod, revAllTime, refundsMonth, revMonth],
       monthlyRaw,
       topBusinesses,
       topCities,
-      [totalBookings, completedBookings, cancelledBookings],
+      [totalBookings, completedBookings, noShowBookings],
+      refundedBookings
     ] = await Promise.all([
       Repo.getUserCounts(periodStart),
       Repo.getBusinessStats(periodStart, periodEnd),
       Repo.getTodayActivity(),
-      Repo.getPlatformRevenue(periodStart, periodEnd),
+      Repo.getPaymentRevenue(periodStart, periodEnd),
       Repo.getMonthlyRevenue(),
-      Repo.getTopBusinesses(monthStart, monthEnd),
+      Repo.getTopBusinesses(),
       Repo.getTopCities(monthStart, monthEnd),
       Repo.getBookingCounts(periodStart, periodEnd),
+      Repo.getRefundedBookings(periodStart, periodEnd),,
     ]);
 
-    const [
-      customerCount, ownerCount, staffCount, adminCount,
-      newUsersInPeriod, suspendedUsers,
-    ] = userCounts;
+    const [customerCount, ownerCount, staffCount, adminCount, newUsersInPeriod] = userCounts;
 
-    const verified  = allBusinesses.filter(b => b.is_verified).length;
     const active    = allBusinesses.filter(b => b.is_active).length;
     const inactive  = allBusinesses.filter(b => !b.is_active).length;
 
     const todayCompleted = todayActivity.filter(b => b.status === "COMPLETED").length;
-    const todayCancelled = todayActivity.filter(b =>
-      ["CANCELLED", "CANCELLED_TIMEOUT"].includes(b.status),
-    ).length;
-    const todayNoShows   = todayActivity.filter(b => b.status === "CANCELLED_NO_SHOW").length;
+    const todayCancelled = todayActivity.filter(b => b.status === "CANCELLED").length;
+    const todayNoShows   = todayActivity.filter(b => b.status === "NO_SHOW").length;
     const grossToday     = todayActivity.reduce((s, b) => s + (b.service_amount ?? 0), 0);
 
-    const feeTodayAmt   = feeToday._sum.amount   ?? 0;
-    const feePeriodAmt  = feePeriod._sum.amount  ?? 0;
-    const feeAllTimeAmt = feeAllTime._sum.amount ?? 0;
+    const revTodayAmt   = revToday._sum.amount   ?? 0;
+    const revPeriodAmt  = revPeriod._sum.amount  ?? 0;
+    const revAllTimeAmt = revAllTime._sum.amount ?? 0;
     const refundsAmt    = refundsMonth._sum.refund_amount ?? 0;
-    const feeMonthAmt   = feeMonth._sum.amount   ?? 0;
+    const revMonthAmt   = revMonth._sum.amount   ?? 0;
 
     const buckets = buildMonthBuckets();
     for (const row of monthlyRaw) {
-      const key    = istMonthKey(row.collected_at);
+      if (!row.settled_at) continue;
+      const key    = tzMonthKey(row.settled_at);
       const bucket = buckets.get(key);
       if (bucket) {
         bucket.revenue_inr += row.amount / 100;
@@ -99,60 +96,49 @@ export class AdminDashboardService {
       period,
 
       users: {
-        total_customers:  customerCount,
-        total_owners:     ownerCount,
-        total_staff:      staffCount,
-        total_admins:     adminCount,
-        new_in_period:    newUsersInPeriod,
-        suspended:        suspendedUsers,
+        total_customers: customerCount,
+        total_owners:    ownerCount,
+        total_staff:     staffCount,
+        total_admins:    adminCount,
+        new_in_period:   newUsersInPeriod,
       },
 
       businesses: {
-        total:                allBusinesses.length,
-        verified,
-        unverified:           allBusinesses.length - verified,
-        pending_verification: pendingVerification,
+        total:         allBusinesses.length,
         active,
         inactive,
-        new_in_period:        newBusinesses,
+        new_in_period: newBusinesses,
       },
 
       today: {
-        date:             toISTDate(now),
+        date:             toTZDate(now),
         total_bookings:   todayActivity.length,
         completed:        todayCompleted,
         cancelled:        todayCancelled,
         no_shows:         todayNoShows,
-        platform_revenue_inr: feeTodayAmt / 100,
-        gross_bookings_inr:   grossToday  / 100,
+        gross_revenue_inr: grossToday / 100,
       },
 
+      // Revenue = settled service amounts (no platform fee concept)
       revenue: {
-        today_inr:           feeTodayAmt  / 100,
-        period_inr:          feePeriodAmt / 100,
-        this_month_inr:      feeMonthAmt  / 100,
-        all_time_inr:        feeAllTimeAmt / 100,
+        today_inr:          revTodayAmt  / 100,
+        period_inr:         revPeriodAmt / 100,
+        this_month_inr:     revMonthAmt  / 100,
+        all_time_inr:       revAllTimeAmt / 100,
         refunds_this_month_inr: refundsAmt / 100,
-        net_this_month_inr:  (feeMonthAmt - refundsAmt) / 100,
+        net_this_month_inr: (revMonthAmt - refundsAmt) / 100,
       },
 
       bookings: {
-        period_total:     totalBookings,
-        period_completed: completedBookings,
-        period_cancelled: cancelledBookings,
-        completion_rate:  totalBookings > 0
-          ? Math.round((completedBookings / totalBookings) * 100) : 0,
-      },
+  period_total: totalBookings,
+  period_completed: completedBookings,
+  period_no_show: noShowBookings,
+  period_refunded: refundedBookings, // ✅ NEW
+},
 
       monthly_revenue: Array.from(buckets.values()),
-
-      top_businesses: topBusinesses,
-
-      top_cities: topCities,
-
-      pending: {
-        verification_queue: pendingVerification,
-      },
+      top_businesses:  topBusinesses,
+      top_cities:      topCities,
     };
   }
 }

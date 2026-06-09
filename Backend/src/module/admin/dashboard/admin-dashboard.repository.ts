@@ -7,13 +7,6 @@ import {
   subMonths,
 } from "date-fns";
 
-function periodBounds(period: "week" | "month" | "year") {
-  const now = new Date();
-  if (period === "week")  return { start: startOfWeek(now, { weekStartsOn: 1 }), end: endOfWeek(now,   { weekStartsOn: 1 }) };
-  if (period === "month") return { start: startOfMonth(now),                      end: endOfMonth(now) };
-  return                         { start: startOfYear(now),                       end: endOfYear(now)  };
-}
-
 export class AdminDashboardRepository {
 
   static async getUserCounts(since: Date) {
@@ -24,19 +17,13 @@ export class AdminDashboardRepository {
       prisma.staff.count({ where: { is_active: true } }),
       prisma.user.count({ where: { role: "ADMIN" } }),
       prisma.user.count({ where: { created_at: { gte: since, lte: now } } }),
-      prisma.user.count({ where: { is_suspended: true } }),
     ]);
   }
 
   static async getBusinessStats(periodStart: Date, periodEnd: Date) {
     return Promise.all([
-      prisma.business.findMany({
-        select: { is_verified: true, is_active: true },
-      }),
-      prisma.business.count({
-        where: { created_at: { gte: periodStart, lte: periodEnd } },
-      }),
-      prisma.business.count({ where: { is_verified: false, is_active: true } }),
+      prisma.business.findMany({ select: { is_active: true } }),
+      prisma.business.count({ where: { created_at: { gte: periodStart, lte: periodEnd } } }),
     ]);
   }
 
@@ -47,11 +34,12 @@ export class AdminDashboardRepository {
         service_date: startOfDay(now),
         status:       { not: "PENDING_PAYMENT" },
       },
-      select: { status: true, platform_fee: true, service_amount: true },
+      select: { status: true, service_amount: true },
     });
   }
 
-  static async getPlatformRevenue(periodStart: Date, periodEnd: Date) {
+  // Revenue from Payment table (not platform_fee_transactions)
+  static async getPaymentRevenue(periodStart: Date, periodEnd: Date) {
     const now        = new Date();
     const todayStart = startOfDay(now);
     const todayEnd   = endOfDay(now);
@@ -59,23 +47,29 @@ export class AdminDashboardRepository {
     const monthEnd   = endOfMonth(now);
 
     return Promise.all([
-      prisma.platformFeeTransaction.aggregate({
-        where: { collected_at: { gte: todayStart, lte: todayEnd } },
+      // Today's settled
+      prisma.payment.aggregate({
+        where: { status: "SETTLED", settled_at: { gte: todayStart, lte: todayEnd } },
         _sum:  { amount: true },
       }),
-      prisma.platformFeeTransaction.aggregate({
-        where: { collected_at: { gte: periodStart, lte: periodEnd } },
+      // Period settled
+      prisma.payment.aggregate({
+        where: { status: "SETTLED", settled_at: { gte: periodStart, lte: periodEnd } },
         _sum:  { amount: true },
       }),
-      prisma.platformFeeTransaction.aggregate({
-        _sum: { amount: true },
+      // All-time settled
+      prisma.payment.aggregate({
+        where: { status: "SETTLED" },
+        _sum:  { amount: true },
       }),
-      prisma.transaction.aggregate({
+      // This month refunded
+      prisma.payment.aggregate({
         where: { status: "REFUNDED", refunded_at: { gte: monthStart, lte: monthEnd } },
         _sum:  { refund_amount: true },
       }),
-      prisma.platformFeeTransaction.aggregate({
-        where: { collected_at: { gte: monthStart, lte: monthEnd } },
+      // This month settled
+      prisma.payment.aggregate({
+        where: { status: "SETTLED", settled_at: { gte: monthStart, lte: monthEnd } },
         _sum:  { amount: true },
       }),
     ]);
@@ -83,41 +77,71 @@ export class AdminDashboardRepository {
 
   static async getMonthlyRevenue() {
     const since = subMonths(startOfMonth(new Date()), 11);
-    return prisma.platformFeeTransaction.findMany({
-      where:  { collected_at: { gte: since } },
-      select: { collected_at: true, amount: true },
+    return prisma.payment.findMany({
+      where:   { status: "SETTLED", settled_at: { gte: since } },
+      select:  { settled_at: true, amount: true },
     });
   }
 
-  static async getTopBusinesses(monthStart: Date, monthEnd: Date) {
-    const rows = await prisma.platformFeeTransaction.groupBy({
-      by:      ["business_id"],
-      where:   { collected_at: { gte: monthStart, lte: monthEnd } },
-      _sum:    { amount: true },
-      _count:  { id: true },
-      orderBy: { _sum: { amount: "desc" } },
-      take:    5,
-    });
+  static async getTopBusinesses() {
+  const rows = await prisma.booking.groupBy({
+  by: ["business_id"],
 
-    if (!rows.length) return [];
+  where: {
+    status: {
+      in: ["COMPLETED", "NO_SHOW"], // ✅ YOUR TRUE BUSINESS LOGIC
+    },
+  },
 
-    const ids      = rows.map(r => r.business_id);
-    const details  = await prisma.business.findMany({
-      where:  { id: { in: ids } },
-      select: { id: true, business_name: true, city: true, state: true, average_rating: true },
-    });
-    const detailMap = new Map(details.map(d => [d.id, d]));
+  _sum: {
+    service_amount: true, // ✅ THIS IS YOUR REAL MONEY
+  },
 
-    return rows.map(r => ({
-      business_id:    r.business_id,
-      business_name:  detailMap.get(r.business_id)?.business_name  ?? "—",
-      city:           detailMap.get(r.business_id)?.city            ?? "—",
-      state:          detailMap.get(r.business_id)?.state           ?? "—",
-      average_rating: detailMap.get(r.business_id)?.average_rating  ?? 0,
-      booking_count:  r._count.id,
-      platform_fee_inr: (r._sum.amount ?? 0) / 100,
-    }));
-  }
+  _count: {
+    id: true,
+  },
+
+  orderBy: {
+    _sum: {
+      service_amount: "desc",
+    },
+  },
+
+  take: 5,
+});
+
+  if (!rows.length) return [];
+
+  const ids = rows.map(r => r.business_id);
+
+  const details = await prisma.business.findMany({
+    where: { id: { in: ids } },
+    select: {
+      id: true,
+      business_name: true,
+      city: true,
+      state: true,
+      average_rating: true,
+      logo_url: true, // ✅ ADD THIS
+    },
+  });
+
+  const map = new Map(details.map(d => [d.id, d]));
+
+  
+
+  return rows.map(r => ({
+    business_id: r.business_id,
+    business_name: map.get(r.business_id)?.business_name ?? "—",
+    city: map.get(r.business_id)?.city ?? "—",
+    state: map.get(r.business_id)?.state ?? "—",
+    average_rating: map.get(r.business_id)?.average_rating ?? 0,
+    logo_url: map.get(r.business_id)?.logo_url ?? null,
+
+    booking_count: r._count.id,
+    revenue_inr: (r._sum.service_amount  ?? 0) / 100, // ✅ CORRECT
+  }));
+}
 
   static async getTopCities(monthStart: Date, monthEnd: Date) {
     const rows = await prisma.booking.groupBy({
@@ -157,18 +181,47 @@ export class AdminDashboardRepository {
         business_count: d.bizIds.size,
       }));
   }
-  
+
   static async getBookingCounts(periodStart: Date, periodEnd: Date) {
-    return Promise.all([
-      prisma.booking.count({
-        where: { service_date: { gte: periodStart, lte: periodEnd }, status: { not: "PENDING_PAYMENT" } },
-      }),
-      prisma.booking.count({
-        where: { service_date: { gte: periodStart, lte: periodEnd }, status: "COMPLETED" },
-      }),
-      prisma.booking.count({
-        where: { service_date: { gte: periodStart, lte: periodEnd }, status: { in: ["CANCELLED", "CANCELLED_TIMEOUT", "CANCELLED_NO_SHOW"] } },
-      }),
-    ]);
-  }
+  return Promise.all([
+
+    // ✅ TOTAL = ONLY VALID BOOKINGS
+    prisma.booking.count({
+      where: {
+        service_date: { gte: periodStart, lte: periodEnd },
+        status: {
+          in: ["COMPLETED", "NO_SHOW"] // ✅ FIXED
+        },
+      },
+    }),
+
+    prisma.booking.count({
+      where: {
+        service_date: { gte: periodStart, lte: periodEnd },
+        status: "COMPLETED",
+      },
+    }),
+
+    prisma.booking.count({
+      where: {
+        service_date: { gte: periodStart, lte: periodEnd },
+        status: "NO_SHOW", // ✅ CHANGE FROM CANCELLED
+      },
+    }),
+  ]);
+}
+
+static async getRefundedBookings(periodStart: Date, periodEnd: Date) {
+  const rows = await prisma.payment.findMany({
+    where: {
+      refund_status: "DONE", // ✅ TRUST THIS ONLY
+    },
+    select: {
+      booking_id: true,
+    },
+    distinct: ["booking_id"],
+  });
+
+  return rows.length;
+}
 }

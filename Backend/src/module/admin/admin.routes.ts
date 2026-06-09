@@ -8,7 +8,6 @@ import { uploadSingle, handleMulterError } from "../../utils/helpers/multer";
 import { AdminController } from "./admin.controller";
 import { adminUsersRouter } from "./users/admin-users.routes";
 import { adminBusinessesRouter } from "./businesses/admin-businesses.routes";
-import { adminVerificationRouter } from "./verification/admin-verification.routes";
 import { adminDashboardRouter } from "./dashboard/admin-dashboard.routes";
 import { platformServicesRouter } from "./platform-services/platform-services.routes";
 
@@ -31,6 +30,5 @@ adminRouter.patch(
 
 adminRouter.use("/users", adminUsersRouter);
 adminRouter.use("/businesses", adminBusinessesRouter);
-adminRouter.use("/verification", adminVerificationRouter);
 adminRouter.use("/dashboard", adminDashboardRouter);
 adminRouter.use("/platform-services", platformServicesRouter);

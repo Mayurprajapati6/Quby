@@ -52,7 +52,6 @@ export interface TopBusinessItemDTO {
   business_name:  string;
   city:           string;
   total_bookings: number;
-  platform_fee:   number;   
   average_rating: number;
 }
 
