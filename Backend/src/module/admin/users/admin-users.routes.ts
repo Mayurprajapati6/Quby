@@ -1,6 +1,5 @@
 import { Router } from "express";
 import { AdminUsersController } from "./admin-users.controller";
-import { suspendSchema, validateRequestBody } from "../../../validators";
 
 export const adminUsersRouter = Router();
 
@@ -13,9 +12,4 @@ adminUsersRouter.get("/customers/:customerId", AdminUsersController.getCustomerD
 adminUsersRouter.get("/staff", AdminUsersController.getStaff);
 adminUsersRouter.get("/staff/:staffId", AdminUsersController.getStaffDetail);
 
-adminUsersRouter.patch(
-  "/:userId/suspend",
-  validateRequestBody(suspendSchema),
-  AdminUsersController.suspendUser,
-);
-adminUsersRouter.patch("/:userId/unsuspend", AdminUsersController.unsuspendUser);
+adminUsersRouter.get("/staff/:staffId/reviews", AdminUsersController.getStaffReviews);

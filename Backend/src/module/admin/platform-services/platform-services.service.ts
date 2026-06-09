@@ -10,16 +10,36 @@ import type {
   PlatformServiceDTO,
 } from "./platform-services.types";
 
-const CACHE_TTL = 60 * 60 * 24;
+const CACHE_TTL      = 60 * 60 * 24;  
+const REDIS_TIMEOUT  = 300;           
 
 function cacheKey(category: string, serviceFor: string): string {
   return `cache:platform-services:${category}:${serviceFor}`;
 }
 
+function withTimeout<T>(promise: Promise<T>, ms: number, label: string): Promise<T | null> {
+  const timeout = new Promise<null>((resolve) =>
+    setTimeout(() => {
+      logger.warn(`[PlatformServices] Redis ${label} timed out after ${ms}ms — skipping cache`);
+      resolve(null);
+    }, ms)
+  );
+  return Promise.race([promise, timeout]).catch((err) => {
+    logger.warn(`[PlatformServices] Redis ${label} error (non-fatal):`, err?.message);
+    return null;
+  });
+}
+
 async function invalidateAllCaches(): Promise<void> {
   try {
-    const keys = await redisClient.keys("cache:platform-services:*");
-    if (keys.length > 0) await redisClient.del(...keys);
+    const keys = await withTimeout(
+      redisClient.keys("cache:platform-services:*"),
+      REDIS_TIMEOUT,
+      "KEYS"
+    );
+    if (keys && (keys as string[]).length > 0) {
+      await withTimeout(redisClient.del(...(keys as string[])), REDIS_TIMEOUT, "DEL");
+    }
   } catch (err) {
     logger.warn("[PlatformServices] Cache invalidation failed (non-fatal):", err);
   }
@@ -71,23 +91,23 @@ export class PlatformServicesService {
     const serviceFor = filters.service_for ?? "ALL";
     const key        = cacheKey(category, serviceFor);
 
-    try {
-      const cached = await redisClient.get(key);
-      if (cached) {
+    const cached = await withTimeout(redisClient.get(key), REDIS_TIMEOUT, "GET");
+    if (cached) {
+      try {
         logger.info(`[PlatformServices] Cache HIT: ${key}`);
-        return JSON.parse(cached);
+        return JSON.parse(cached as string);
+      } catch {
+        // corrupt JSON in cache — fall through to DB
       }
-    } catch (err) {
-      logger.warn("[PlatformServices] Cache GET failed (non-fatal):", err);
     }
 
     const services = await PlatformServicesRepository.findAll(filters);
 
-    try {
-      await redisClient.setex(key, CACHE_TTL, JSON.stringify(services));
-    } catch (err) {
-      logger.warn("[PlatformServices] Cache SET failed (non-fatal):", err);
-    }
+    withTimeout(
+      redisClient.setex(key, CACHE_TTL, JSON.stringify(services)),
+      REDIS_TIMEOUT,
+      "SET"
+    ).catch(() => {/* already warned inside withTimeout */});
 
     return services as PlatformServiceDTO[];
   }

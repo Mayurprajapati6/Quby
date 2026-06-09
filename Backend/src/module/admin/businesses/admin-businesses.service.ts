@@ -1,13 +1,10 @@
 import { AdminBusinessesRepository } from "./admin-businesses.repository";
-import { queueEmail } from "../../../services/email.services";
-import { emitToUser } from "../../../socket/socket.service";
-import { NotFoundError, BadRequestError } from "../../../utils/errors/app.error";
+import { NotFoundError } from "../../../utils/errors/app.error";
 import { formatInTimeZone } from "date-fns-tz";
-import logger from "../../../config/logger.config";
 
-const IST = "Asia/Kolkata";
-function toIST(d: Date) { return formatInTimeZone(d, IST, "yyyy-MM-dd'T'HH:mm:ssxxx"); }
-function toISTDate(d: Date) { return formatInTimeZone(d, IST, "yyyy-MM-dd"); }
+const TZ = "Asia/Kolkata";
+function toTZ(d: Date)     { return formatInTimeZone(d, TZ, "yyyy-MM-dd'T'HH:mm:ssxxx"); }
+function toTZDate(d: Date) { return formatInTimeZone(d, TZ, "yyyy-MM-dd"); }
 
 function toListItem(b: any) {
   return {
@@ -19,44 +16,43 @@ function toListItem(b: any) {
     city:           b.city,
     state:          b.state,
     logo_url:       b.logo_url       ?? null,
-    is_verified:    b.is_verified,
     is_active:      b.is_active,
-    verified_at:    b.verified_at    ? toISTDate(b.verified_at) : null,
     average_rating: b.average_rating ?? 0,
     total_reviews:  b.total_reviews  ?? 0,
-    staff_count:    b._count.staff,
-    booking_count:  b._count.bookings,
+    _count: {
+  staff: b._count.staff,
+  bookings: b._count.bookings,
+},
     owner: {
       id:    b.owner.id,
       name:  b.owner.name,
       email: b.owner.user.email,
     },
-    auth_suspended: b.auth_user?.is_suspended ?? false,
-    created_at:     toISTDate(b.created_at),
+    created_at: toTZDate(b.created_at),
+    earnings: {
+  total_inr:
+    (b.payments?.reduce((sum: number, p: any) => sum + p.amount, 0) ?? 0) / 100,
+},
   };
 }
 
 export class AdminBusinessesService {
 
   static async getBusinesses(opts: {
-    search?:         string;
-    city?:           string;
-    state?:          string;
-    is_verified?:    boolean;
-    is_active?:      boolean;
-    auth_suspended?: boolean;  
-    page:            number;
-    limit:           number;
+    search?:   string;
+    city?:     string;
+    state?:    string;
+    is_active?: boolean;
+    page:      number;
+    limit:     number;
   }) {
     const { businesses, total } = await AdminBusinessesRepository.find({
-      search:         opts.search,
-      city:           opts.city,
-      state:          opts.state,
-      is_verified:    opts.is_verified,
-      is_active:      opts.is_active,
-      auth_suspended: opts.auth_suspended,
-      skip:           (opts.page - 1) * opts.limit,
-      take:           opts.limit,
+      search:    opts.search,
+      city:      opts.city,
+      state:     opts.state,
+      is_active: opts.is_active,
+      skip:      (opts.page - 1) * opts.limit,
+      take:      opts.limit,
     });
 
     return {
@@ -73,6 +69,65 @@ export class AdminBusinessesService {
   static async getBusinessDetail(businessId: string) {
     const b = await AdminBusinessesRepository.findById(businessId);
     if (!b) throw new NotFoundError("Business not found.");
+    
+
+    // Compute earnings from Payment table (source of truth — no wallet)
+const { prisma } = await import("../../../config/prisma");
+
+const [total, completed, noShow] = await Promise.all([
+
+  // ✅ TOTAL EARNINGS (ONLY VALID MONEY)
+  prisma.payment.aggregate({
+    where: {
+      business_id: businessId,
+
+      status: { in: ["PAID", "SETTLED"] },
+
+      refund_status: "NONE", // ✅ STRICT FIX
+
+      booking: {
+        status: {
+          in: ["COMPLETED", "NO_SHOW"], // ✅ ONLY VALID BOOKINGS
+        },
+      },
+    },
+    _sum: { amount: true },
+  }),
+
+  // ✅ COMPLETED EARNINGS
+  prisma.payment.aggregate({
+    where: {
+      business_id: businessId,
+
+      status: { in: ["PAID", "SETTLED"] },
+
+      refund_status: "NONE",
+
+      booking: {
+        status: "COMPLETED",
+      },
+    },
+    _sum: { amount: true },
+  }),
+
+  // ✅ NO SHOW EARNINGS
+  prisma.payment.aggregate({
+    where: {
+      business_id: businessId,
+
+      status: { in: ["PAID", "SETTLED"] },
+
+      refund_status: "NONE",
+
+      booking: {
+        status: "NO_SHOW",
+      },
+    },
+    _sum: { amount: true },
+  }),
+
+]);
+
 
     return {
       ...toListItem(b),
@@ -86,28 +141,12 @@ export class AdminBusinessesService {
       business_email:     b.business_email      ?? null,
       business_phone:     b.business_phone      ?? null,
       website_url:        b.website_url         ?? null,
-      instagram_url:      b.instagram_url       ?? null,
-      facebook_url:       b.facebook_url        ?? null,
       break_time_minutes: b.break_time_minutes,
-      verification_note:  b.verification_note   ?? null,
-      wallet: b.wallet
-        ? {
-            balance_inr:           b.wallet.balance / 100,
-            lifetime_earnings_inr: b.wallet.lifetime_earnings / 100,
-          }
-        : null,
-      auth_user: b.auth_user
-        ? {
-            id:               b.auth_user.id,
-            email:            b.auth_user.email,
-            is_active:        b.auth_user.is_active,
-            is_suspended:     b.auth_user.is_suspended,
-            suspended_at:     b.auth_user.suspended_at
-              ? toIST(b.auth_user.suspended_at)
-              : null,
-            suspended_reason: b.auth_user.suspended_reason ?? null,
-          }
-        : null,
+      earnings: {
+  total_inr:      (total._sum.amount ?? 0) / 100,        // ₹1900
+  completed_inr:  (completed._sum.amount ?? 0) / 100,    // ₹1600
+  no_show_inr:    (noShow._sum.amount ?? 0) / 100,       // ₹300
+},
       owner: {
         id:      b.owner.id,
         name:    b.owner.name,
@@ -120,87 +159,116 @@ export class AdminBusinessesService {
         image_url:  img.image_url,
         is_primary: img.is_primary,
       })),
-      services: (b.services ?? []).map((sv: any) => ({
-        id:              sv.id,
-        name:            sv.platform_service.name,
-        category:        sv.platform_service.category ?? null,
-        offerings_count: sv._count?.offerings ?? undefined,
-      })),
       schedules: (b.schedules ?? []).map((sc: any) => ({
-        day_of_week:  sc.day_of_week,
-        is_available: sc.is_available,
-        open_time:    sc.open_time  ?? null,
-        close_time:   sc.close_time ?? null,
+        day_of_week: sc.day_of_week,
+        is_open:     sc.is_open,
+        open_time:   sc.open_time  ?? null,
+        close_time:  sc.close_time ?? null,
       })),
       staff: (b.staff ?? []).map((s: any) => ({
-        id:             s.id,
-        name:           s.name,
-        email:          s.email,
-        average_rating: s.average_rating ?? 0,
-        total_reviews:  s.total_reviews  ?? 0,
-      })),
+  id:             s.id,
+  name:           s.name,
+  email:          s.email,
+  avatar_url:     s.avatar_url ?? null, // ✅ FIX
+  average_rating: s.average_rating ?? 0,
+  total_reviews:  s.total_reviews  ?? 0,
+})),
+
+services: (b.services ?? []).map((svc: any) => ({
+  id: svc.id,
+  price: svc.price,
+  discounted_price: svc.discounted_price,
+  platform_service: svc.platform_service,
+})),
     };
   }
 
-  static async suspendBusiness(businessId: string, reason: string) {
-    const biz = await AdminBusinessesRepository.findBusinessWithAuthUser(businessId);
-    if (!biz) throw new NotFoundError("Business not found.");
-    if (!biz.auth_user_id || !biz.auth_user) {
-      throw new BadRequestError("This business has no login account to suspend.");
-    }
-    if (biz.auth_user.is_suspended) {
-      throw new BadRequestError("Business login is already suspended.");
-    }
+  static async getBusinessReviews(
+  businessId: string,
+  opts: { page: number; limit: number; rating?: number }
+) {
+  const { prisma } = await import("../../../config/prisma");
 
-    await AdminBusinessesRepository.setAuthUserSuspension(biz.auth_user.id, true, reason);
+  const where: any = {
+    booking: {
+      business_id: businessId, // ✅ IMPORTANT FIX
+    },
+  };
 
-    await AdminBusinessesRepository.createBusinessNotification(
-      businessId,
-      "BUSINESS_SUSPENDED",
-      "Business Account Suspended",
-      `Your business account has been suspended. Reason: ${reason}`,
-      "BOTH",
-    );
-
-    emitToUser(biz.auth_user.id, "account:suspended", { reason });
-
-    queueEmail({
-      to:   biz.owner.user.email,
-      type: "business-suspended",
-      data: { businessName: biz.business_name, reason },
-    }).catch(err => logger.warn("[AdminBiz] Suspend email failed:", err));
-
-    return { message: "Business suspended." };
+  if (opts.rating) {
+    where.rating = opts.rating;
   }
 
-  static async unsuspendBusiness(businessId: string) {
-    const biz = await AdminBusinessesRepository.findBusinessWithAuthUser(businessId);
-    if (!biz) throw new NotFoundError("Business not found.");
-    if (!biz.auth_user_id || !biz.auth_user) {
-      throw new BadRequestError("This business has no login account.");
+  const [reviews, total] = await Promise.all([
+    prisma.review.findMany({
+      where,
+      include: {
+        booking: {
+          include: {
+            customer: {
+              select: { name: true, avatar_url: true },
+            },
+            staff: {
+              select: { name: true, avatar_url: true },
+            },
+          
+          },
+        },
+      },
+      orderBy: { created_at: "desc" },
+      skip: (opts.page - 1) * opts.limit,
+      take: opts.limit,
+    }),
+
+    prisma.review.count({ where }),
+  ]);
+
+  // Collect all service_ids from booking.services JSON
+  const allServiceIds = new Set<string>();
+  reviews.forEach((r: any) => {
+    if (Array.isArray(r.booking?.services)) {
+      r.booking.services.forEach((s: any) => {
+        if (s?.service_id) allServiceIds.add(s.service_id);
+      });
     }
-    if (!biz.auth_user.is_suspended) {
-      throw new BadRequestError("Business login is not currently suspended.");
-    }
+  });
 
-    await AdminBusinessesRepository.setAuthUserSuspension(biz.auth_user.id, false);
+  // Fetch service names in one query
+  const serviceRows = await prisma.businessServiceOffering.findMany({
+    where: { id: { in: Array.from(allServiceIds) } },
+    include: { platform_service: { select: { name: true } } },
+  });
+  const serviceLookup = new Map(
+    serviceRows.map((s: any) => [s.id, s.platform_service.name])
+  );
 
-    await AdminBusinessesRepository.createBusinessNotification(
-      businessId,
-      "BUSINESS_UNSUSPENDED",
-      "Business Account Reinstated",
-      "Your business account suspension has been lifted. You may log in again.",
-      "BOTH",
-    );
+  return {
+    reviews: reviews.map((r: any) => ({
+      id: r.id,
+      rating: r.rating,
+      comment: r.comment,
+      created_at: r.created_at,
 
-    emitToUser(biz.auth_user.id, "account:unsuspended", {});
+      customer_name: r.booking?.customer?.name,
+      customer_avatar: r.booking?.customer?.avatar_url,
 
-    queueEmail({
-      to:   biz.owner.user.email,
-      type: "business-unsuspended",
-      data: { businessName: biz.business_name },
-    }).catch(err => logger.warn("[AdminBiz] Unsuspend email failed:", err));
+      staff_name: r.booking?.staff?.name,
+      staff_avatar: r.booking?.staff?.avatar_url,
 
-    return { message: "Business unsuspended." };
-  }
+      services: Array.isArray(r.booking?.services)
+        ? r.booking.services.map((s: any) => serviceLookup.get(s.service_id)).filter(Boolean)
+        : [],
+
+      images: r.images ?? [],
+      business_response: r.business_response ?? null,
+    })),
+
+    pagination: {
+      total,
+      page: opts.page,
+      limit: opts.limit,
+      total_pages: Math.ceil(total / opts.limit),
+    },
+  };
+}
 }

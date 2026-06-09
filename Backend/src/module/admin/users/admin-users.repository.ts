@@ -3,10 +3,11 @@ import { prisma } from "../../../config/prisma";
 export class AdminUsersRepository {
 
   static async findOwners(opts: {
-    search?:       string;
-    is_suspended?: boolean;
-    skip:          number;
-    take:          number;
+    search?: string;
+    city?:   string;
+    state?:  string;
+    skip:    number;
+    take:    number;
   }) {
     const filters: any[] = [];
 
@@ -19,10 +20,8 @@ export class AdminUsersRepository {
         ],
       });
     }
-
-    if (opts.is_suspended !== undefined) {
-      filters.push({ user: { is_suspended: opts.is_suspended } });
-    }
+    if (opts.city)  filters.push({ city:  { contains: opts.city,  mode: "insensitive" } });
+    if (opts.state) filters.push({ state: { contains: opts.state, mode: "insensitive" } });
 
     const where = filters.length ? { AND: filters } : {};
 
@@ -30,9 +29,7 @@ export class AdminUsersRepository {
       prisma.owner.findMany({
         where,
         include: {
-          user: {
-            select: { id: true, email: true, is_active: true, is_suspended: true, suspended_at: true, suspended_reason: true },
-          },
+          user:   { select: { id: true, email: true, is_active: true } },
           _count: { select: { businesses: true } },
         },
         orderBy: { created_at: "desc" },
@@ -49,14 +46,21 @@ export class AdminUsersRepository {
     return prisma.owner.findUnique({
       where:   { id: ownerId },
       include: {
-        user: {
-          select: { id: true, email: true, is_active: true, is_suspended: true, suspended_at: true, suspended_reason: true, created_at: true },
-        },
+        user: { select: { id: true, email: true, is_active: true, created_at: true } },
         businesses: {
           select: {
-            id: true, business_name: true, city: true, state: true,
-            is_active: true, is_verified: true, average_rating: true,
-          },
+    id: true,
+    business_name: true,
+    city: true,
+    state: true,
+    is_active: true,
+    is_verified: true,
+    average_rating: true,
+    logo_url: true,
+    service_for: true,
+
+    _count: { select: { staff: true } } // 🔥 ADD THIS
+  },
           orderBy: { created_at: "desc" },
         },
       },
@@ -64,12 +68,11 @@ export class AdminUsersRepository {
   }
 
   static async findCustomers(opts: {
-    search?:       string;
-    city?:         string;
-    state?:        string;
-    is_suspended?: boolean;
-    skip:          number;
-    take:          number;
+    search?: string;
+    city?:   string;
+    state?:  string;
+    skip:    number;
+    take:    number;
   }) {
     const filters: any[] = [];
 
@@ -82,11 +85,8 @@ export class AdminUsersRepository {
         ],
       });
     }
-    if (opts.city)         filters.push({ city:  { contains: opts.city,  mode: "insensitive" } });
-    if (opts.state)        filters.push({ state: { contains: opts.state, mode: "insensitive" } });
-    if (opts.is_suspended !== undefined) {
-      filters.push({ user: { is_suspended: opts.is_suspended } });
-    }
+    if (opts.city)  filters.push({ city:  { contains: opts.city,  mode: "insensitive" } });
+    if (opts.state) filters.push({ state: { contains: opts.state, mode: "insensitive" } });
 
     const where = filters.length ? { AND: filters } : {};
 
@@ -94,9 +94,7 @@ export class AdminUsersRepository {
       prisma.customer.findMany({
         where,
         include: {
-          user: {
-            select: { id: true, email: true, is_active: true, is_suspended: true, suspended_at: true, suspended_reason: true },
-          },
+          user:   { select: { id: true, email: true, is_active: true } },
           _count: { select: { bookings: true, reviews: true } },
         },
         orderBy: { created_at: "desc" },
@@ -113,11 +111,8 @@ export class AdminUsersRepository {
     return prisma.customer.findUnique({
       where:   { id: customerId },
       include: {
-        user: {
-          select: { id: true, email: true, is_active: true, is_suspended: true, suspended_at: true, suspended_reason: true, created_at: true },
-        },
-        wallet: { select: { balance: true, lifetime_spent: true, lifetime_refunds: true } },
-        _count: { select: { bookings: true, reviews: true, favourites: true } },
+        user:   { select: { id: true, email: true, is_active: true, created_at: true } },
+        _count: { select: { bookings: true, reviews: true } },
       },
     });
   }
@@ -142,10 +137,15 @@ export class AdminUsersRepository {
       prisma.staff.findMany({
         where,
         include: {
-          user: {
-            select: { id: true, email: true, is_active: true, is_suspended: true, suspended_at: true, suspended_reason: true },
-          },
-          business: { select: { id: true, business_name: true, city: true } },
+          user:     { select: { id: true, email: true, is_active: true } },
+          business: {
+  select: {
+    id: true,
+    business_name: true,
+    city: true,
+    logo_url: true, // 🔥 ADD THIS
+  },
+},
           _count:   { select: { bookings: true, reviews: true } },
         },
         orderBy: { created_at: "desc" },
@@ -162,14 +162,28 @@ export class AdminUsersRepository {
     return prisma.staff.findUnique({
       where:   { id: staffId },
       include: {
-        user: {
-          select: { id: true, email: true, is_active: true, is_suspended: true, suspended_at: true, suspended_reason: true, created_at: true },
-        },
-        business: { select: { id: true, business_name: true, city: true, state: true } },
+        user:      { select: { id: true, email: true, is_active: true, created_at: true } },
+        business: {
+  select: {
+    id: true,
+    business_name: true,
+    city: true,
+    state: true,
+    logo_url: true, // 🔥 ADD
+  },
+},
+        schedules: { orderBy: { day_of_week: "asc" } as any },
         services: {
           include: {
             service_offering: {
-              include: { platform_service: { select: { name: true, category: true } } },
+              include: { platform_service: {
+  select: {
+    name: true,
+    category: true,
+    service_for: true,
+    image_url: true, // 🔥 ADD
+  },
+}},
             },
           },
         },
@@ -178,28 +192,33 @@ export class AdminUsersRepository {
     });
   }
 
-  static async setUserSuspension(
-    userId:   string,
-    suspend:  boolean,
-    reason?:  string,
-  ) {
-    return prisma.user.update({
-      where: { id: userId },
-      data: {
-        is_suspended:     suspend,
-        suspended_at:     suspend ? new Date() : null,
-        suspended_reason: suspend ? (reason ?? null) : null,
-        ...(suspend  && { is_active: false, version: { increment: 1 } }),
-        ...(!suspend && { is_active: true }),
-      },
-      select: { id: true, email: true, is_suspended: true, is_active: true },
-    });
-  }
-
   static async findUserById(userId: string) {
     return prisma.user.findUnique({
       where:  { id: userId },
-      select: { id: true, email: true, role: true, is_suspended: true },
+      select: { id: true, email: true, role: true, is_active: true },
     });
   }
+
+  // 🔥 ADD THIS METHOD
+static async findStaffReviews(staffId: string) {
+  return prisma.review.findMany({
+    where: { staff_id: staffId },
+    include: {
+      customer: {
+        select: {
+          id: true,
+          name: true,
+          avatar_url: true,
+        },
+      },
+      booking: {
+        select: {
+          service_date: true,
+          services: true,
+        },
+      },
+    },
+    orderBy: { created_at: "desc" },
+  });
+}
 }

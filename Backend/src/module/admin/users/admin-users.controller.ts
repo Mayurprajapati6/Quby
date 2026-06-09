@@ -1,7 +1,6 @@
 import { Response, NextFunction } from "express";
 import { AdminUsersService } from "./admin-users.service";
 import { successResponse } from "../../../utils/helpers/response";
-import { BadRequestError } from "../../../utils/errors/app.error";
 import type { AuthRequest } from "../../../middlewares/types";
 
 function pagination(req: AuthRequest) {
@@ -11,19 +10,14 @@ function pagination(req: AuthRequest) {
   };
 }
 
-function parseBool(val: string | undefined): boolean | undefined {
-  if (val === "true")  return true;
-  if (val === "false") return false;
-  return undefined;
-}
-
 export class AdminUsersController {
 
   static async getOwners(req: AuthRequest, res: Response, next: NextFunction) {
     try {
       const data = await AdminUsersService.getOwners({
-        search:       req.query.search       as string | undefined,
-        is_suspended: parseBool(req.query.is_suspended as string),
+        search: req.query.search as string | undefined,
+        city:   req.query.city   as string | undefined,
+        state:  req.query.state  as string | undefined,
         ...pagination(req),
       });
       res.json(successResponse(data));
@@ -40,10 +34,9 @@ export class AdminUsersController {
   static async getCustomers(req: AuthRequest, res: Response, next: NextFunction) {
     try {
       const data = await AdminUsersService.getCustomers({
-        search:       req.query.search       as string | undefined,
-        city:         req.query.city         as string | undefined,
-        state:        req.query.state        as string | undefined,
-        is_suspended: parseBool(req.query.is_suspended as string),
+        search: req.query.search as string | undefined,
+        city:   req.query.city   as string | undefined,
+        state:  req.query.state  as string | undefined,
         ...pagination(req),
       });
       res.json(successResponse(data));
@@ -75,19 +68,20 @@ export class AdminUsersController {
     } catch (err) { next(err); }
   }
 
-  static async suspendUser(req: AuthRequest, res: Response, next: NextFunction) {
-    try {
-      const { reason } = req.body;
-      if (!reason?.trim()) throw new BadRequestError("reason is required to suspend a user.");
-      const data = await AdminUsersService.suspendUser(req.params.userId, reason.trim());
-      res.json(successResponse(data));
-    } catch (err) { next(err); }
-  }
+  // 🔥 ADD THIS
+static async getStaffReviews(
+  req: AuthRequest,
+  res: Response,
+  next: NextFunction
+) {
+  try {
+    const { staffId } = req.params as { staffId: string };
 
-  static async unsuspendUser(req: AuthRequest, res: Response, next: NextFunction) {
-    try {
-      const data = await AdminUsersService.unsuspendUser(req.params.userId);
-      res.json(successResponse(data));
-    } catch (err) { next(err); }
+    const data = await AdminUsersService.getStaffReviews(staffId);
+
+    res.json(successResponse(data));
+  } catch (err) {
+    next(err);
   }
+}
 }

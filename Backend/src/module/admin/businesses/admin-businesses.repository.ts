@@ -3,14 +3,13 @@ import { prisma } from "../../../config/prisma";
 export class AdminBusinessesRepository {
 
   static async find(opts: {
-    search?:         string;
-    city?:           string;
-    state?:          string;
-    is_verified?:    boolean;
-    is_active?:      boolean;
-    auth_suspended?: boolean; 
-    skip:            number;
-    take:            number;
+    search?:      string;
+    city?:        string;
+    state?:       string;
+    is_verified?: boolean;
+    is_active?:   boolean;
+    skip:         number;
+    take:         number;
   }) {
     const filters: any[] = [];
 
@@ -23,14 +22,10 @@ export class AdminBusinessesRepository {
         ],
       });
     }
-    if (opts.city)                       filters.push({ city:        { contains: opts.city,  mode: "insensitive" } });
-    if (opts.state)                      filters.push({ state:       { contains: opts.state, mode: "insensitive" } });
-    if (opts.is_verified !== undefined)  filters.push({ is_verified: opts.is_verified });
-    if (opts.is_active   !== undefined)  filters.push({ is_active:   opts.is_active });
-
-    if (opts.auth_suspended !== undefined) {
-      filters.push({ auth_user: { is_suspended: opts.auth_suspended } });
-    }
+    if (opts.city)                      filters.push({ city:        { contains: opts.city,  mode: "insensitive" } });
+    if (opts.state)                     filters.push({ state:       { contains: opts.state, mode: "insensitive" } });
+    if (opts.is_verified !== undefined) filters.push({ is_verified: opts.is_verified });
+    if (opts.is_active   !== undefined) filters.push({ is_active:   opts.is_active });
 
     const where = filters.length ? { AND: filters } : {};
 
@@ -38,9 +33,22 @@ export class AdminBusinessesRepository {
       prisma.business.findMany({
         where,
         include: {
-          owner:     { select: { id: true, name: true, user: { select: { email: true } } } },
-          auth_user: { select: { id: true, is_active: true, is_suspended: true } },
-          _count:    { select: { staff: true, bookings: true } },
+          owner:  { select: { id: true, name: true, user: { select: { email: true } } } },
+          _count: {
+  select: {
+    staff: true,
+
+    bookings: {
+      where: {
+        status: {
+          in: ["COMPLETED", "NO_SHOW", "REFUNDED"], // ✅ IMPORTANT
+        },
+        
+      },
+    },
+
+  },
+},
         },
         orderBy: { created_at: "desc" },
         skip:    opts.skip,
@@ -59,49 +67,51 @@ export class AdminBusinessesRepository {
         owner: {
           select: { id: true, name: true, phone: true, user: { select: { id: true, email: true } } },
         },
-        auth_user: {
-          select: { id: true, email: true, is_active: true, is_suspended: true, suspended_at: true, suspended_reason: true },
-        },
         images:   { select: { id: true, image_url: true, is_primary: true } },
         services: {
-          include: { platform_service: { select: { id: true, name: true, category: true } } },
-        },
+  select: {
+    id: true,
+    price: true,
+    discounted_price: true,
+
+    platform_service: {
+      select: {
+        id: true,
+        name: true,
+        category: true,
+        image_url: true, // ✅ THIS WAS MISSING
+      },
+    },
+  },
+},
         schedules: { orderBy: { day_of_week: "asc" } as any },
         staff: {
-          where:  { is_active: true },
-          select: { id: true, name: true, email: true, average_rating: true, total_reviews: true },
-        },
-        wallet: { select: { balance: true, lifetime_earnings: true } },
-        _count:  { select: { staff: true, bookings: true, reviews: true } },
-      },
-    });
-  }
+  where:  { is_active: true },
+  select: {
+    id: true,
+    name: true,
+    email: true,
+    avatar_url: true,   // ✅ ADD THIS
+    average_rating: true,
+    total_reviews: true
+  },
+},
+        _count: {
+  select: {
+    staff: true,
+    reviews: true,
 
-  static async findBusinessWithAuthUser(businessId: string) {
-    return prisma.business.findUnique({
-      where:  { id: businessId },
-      select: {
-        id:            true,
-        business_name: true,
-        auth_user_id:  true,
-        auth_user: {
-          select: { id: true, email: true, is_suspended: true },
+    bookings: {
+      where: {
+        status: {
+          in: ["COMPLETED", "NO_SHOW", "REFUNDED"],
         },
-        owner: {
-          select: { user: { select: { id: true, email: true } } },
-        },
+        
       },
-    });
-  }
+    },
 
-  static async setAuthUserSuspension(authUserId: string, suspend: boolean, reason?: string) {
-    return prisma.user.update({
-      where: { id: authUserId },
-      data: {
-        is_suspended:     suspend,
-        suspended_at:     suspend ? new Date() : null,
-        suspended_reason: suspend ? (reason ?? null) : null,
-        is_active:        !suspend,
+  },
+},
       },
     });
   }
