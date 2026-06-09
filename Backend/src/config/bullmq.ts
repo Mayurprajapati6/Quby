@@ -1,6 +1,6 @@
 import { Queue, QueueOptions } from "bullmq";
-import { redisClient }         from "./redis";
-import logger                  from "./logger.config";
+import { redisClient } from "./redis";
+import logger from "./logger.config";
 
 const connection = redisClient;
 
@@ -13,7 +13,8 @@ const defaultJobOptions: QueueOptions["defaultJobOptions"] = {
 
 export const QUEUE_NAMES = {
   EMAIL:        "email-queue",
-  ESCROW:       "escrow-release",
+  SETTLE:       "payment-settle",   
+  REFUND:       "payment-refund",   
   NOTIFICATION: "notification-queue",
   BOOKING:      "booking-jobs",
   ANALYTICS:    "analytics-queue",
@@ -25,9 +26,24 @@ export const emailQueue = new Queue(QUEUE_NAMES.EMAIL, {
   defaultJobOptions,
 });
 
-export const escrowQueue = new Queue(QUEUE_NAMES.ESCROW, {
+export const settleQueue = new Queue(QUEUE_NAMES.SETTLE, {
   connection,
-  defaultJobOptions: { ...defaultJobOptions, attempts: 5 },
+  defaultJobOptions: {
+    ...defaultJobOptions,
+    attempts:         5,
+    removeOnComplete: { count: 10_000, age: 90 * 24 * 3600 }, 
+    removeOnFail:     { count: 10_000, age: 90 * 24 * 3600 },
+  },
+});
+
+export const refundQueue = new Queue(QUEUE_NAMES.REFUND, {
+  connection,
+  defaultJobOptions: {
+    ...defaultJobOptions,
+    attempts:         5,
+    removeOnComplete: { count: 5_000, age: 90 * 24 * 3600 },
+    removeOnFail:     { count: 5_000, age: 90 * 24 * 3600 },
+  },
 });
 
 export const notificationQueue = new Queue(QUEUE_NAMES.NOTIFICATION, {
@@ -55,47 +71,21 @@ export const deadLetterQueue = new Queue(QUEUE_NAMES.DEAD_LETTER, {
 });
 
 export type EmailJobType =
-
-  | "email-verification"
-  | "password-reset"
-  | "change-password-confirmation"
-  | "account-deleted"
-
-  | "account-suspended"
-  | "account-unsuspended"
-
   | "staff-invitation"
   | "staff-reinvitation"
-  | "business-credentials"
-
+  | "password-reset"
+  | "change-password-confirmation"
   | "booking-confirmation"
   | "booking-cancelled"
   | "booking-cancelled-by-business"
-  | "booking-no-show"
-  | "booking-reminder"
   | "refund-confirmation"
-
-  | "service-completed"
-  | "service-delayed"
-
-  | "review-reminder"
-
-  | "business-submitted"
-  | "business-verified"
-  | "business-rejected"
-
-  | "business-suspended"
-  | "business-unsuspended"
-
   | "leave-request-owner"
   | "leave-approved-staff"
   | "leave-rejected-staff"
-
-  | "business-holiday";
-
-export type EscrowJobType        = "release-escrow";
-export type NotificationJobType  = "send-reminder" | "review-reminder" | "cleanup-notifications";
-export type BookingJobType       = "check-no-show";
+  | "business-holiday"
+  | "booking-reminder"
+  | "account-deleted"
+  | "service-completed";
 
 export interface EmailJobPayload {
   to:   string;
@@ -103,17 +93,25 @@ export interface EmailJobPayload {
   data: Record<string, unknown>;
 }
 
-export interface EscrowJobPayload {
-  bookingId:    string;
-  businessId:   string;
-  escrowAmount: number;
+export interface SettleJobPayload {
+  bookingId: string;
 }
+
+export interface RefundJobPayload {
+  bookingId: string;
+  paymentId: string;
+  amount:    number;
+  reason:    string;
+}
+
 export interface NotificationJobPayload {
   bookingId?: string;
   type?:      string;
 }
+
 export interface BookingJobPayload {
   bookingId: string;
+  event:     "payment-timeout" | "no-show";
 }
 
 export type AnalyticsJobType =
@@ -121,8 +119,8 @@ export type AnalyticsJobType =
   | "booking-completed"
   | "booking-cancelled"
   | "payment-received"
-  | "review-submitted"
-  | "escrow-released";
+  | "payment-settled"
+  | "review-submitted";
 
 export interface AnalyticsJobPayload {
   type:       AnalyticsJobType;
@@ -134,7 +132,10 @@ export interface AnalyticsJobPayload {
 }
 
 export async function getQueueStats() {
-  const queues = [emailQueue, escrowQueue, notificationQueue, bookingQueue, analyticsQueue, deadLetterQueue];
+  const queues = [
+    emailQueue, settleQueue, refundQueue,
+    notificationQueue, bookingQueue, analyticsQueue, deadLetterQueue,
+  ];
   return Promise.all(
     queues.map(async (q) => ({
       name:      q.name,
@@ -150,7 +151,8 @@ export async function getQueueStats() {
 export async function closeQueues(): Promise<void> {
   await Promise.all([
     emailQueue.close(),
-    escrowQueue.close(),
+    settleQueue.close(),
+    refundQueue.close(),
     notificationQueue.close(),
     bookingQueue.close(),
     analyticsQueue.close(),

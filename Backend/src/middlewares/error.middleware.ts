@@ -9,7 +9,19 @@ export function appErrorHandler(
   next: NextFunction,
 ): void {
   if ((err as any).statusCode) {
-    res.status((err as any).statusCode).json({ success: false, message: err.message });
+    const response: any = { success: false, message: err.message };
+    
+    // Include error code if present (for frontend error handling)
+    if ((err as any).code) {
+      response.code = (err as any).code;
+    }
+    
+    // Include reason if present (for availability errors)
+    if ((err as any).reason) {
+      response.reason = (err as any).reason;
+    }
+    
+    res.status((err as any).statusCode).json(response);
     return;
   }
 

@@ -22,7 +22,7 @@ export const authenticate = async (
 
     const user = await prisma.user.findUnique({
       where:  { id: payload.userId },
-      select: { version: true, is_active: true, is_suspended: true, role: true },
+      select: { version: true, is_active: true, role: true },
     });
 
     if (!user) return next(new UnauthorizedError("Account not found."));
@@ -31,22 +31,32 @@ export const authenticate = async (
       return next(new UnauthorizedError("Session expired. Please login again."));
     }
 
-    if ((user as any).is_suspended) {
-      return next(new UnauthorizedError("Your account has been suspended. Please contact support."));
+    if (!user.is_active) {
+      return next(new UnauthorizedError("Your account has been deactivated."));
     }
 
-    switch (user.role) {
+    let businessId: string | undefined;
 
+    switch (user.role) {
       case "STAFF": {
-        if (!user.is_active) {
-          return next(new UnauthorizedError("You are no longer associated with a business."));
-        }
         const staff = await prisma.staff.findUnique({
           where:  { user_id: payload.userId },
           select: { is_active: true },
         });
         if (!staff?.is_active) {
           return next(new UnauthorizedError("You are no longer associated with a business."));
+        }
+        break;
+      }
+
+      case "OWNER": {
+        
+        const business = await prisma.business.findFirst({
+          where:  { owner_id: payload.userId },
+          select: { id: true },
+        });
+        if (business) {
+          businessId = business.id;
         }
         break;
       }
@@ -62,31 +72,11 @@ export const authenticate = async (
         break;
       }
 
-      case "BUSINESS": {
-        if (!user.is_active) {
-          return next(new UnauthorizedError("This saloon account has been deactivated."));
-        }
-        const business = await prisma.business.findUnique({
-          where:  { auth_user_id: payload.userId },
-          select: { is_active: true, id: true },
-        });
-        if (!business?.is_active) {
-          return next(new UnauthorizedError("This saloon account has been deactivated."));
-        }
-        if (payload.businessId !== business.id) {
-          return next(new UnauthorizedError("Invalid session. Please login again."));
-        }
+      default:
         break;
-      }
-
-      default: {
-        if (!user.is_active) {
-          return next(new UnauthorizedError("Your account has been deactivated."));
-        }
-      }
     }
 
-    req.user = payload;
+    req.user = { ...payload, ...(businessId && { businessId }) };
     next();
   } catch (err) {
     next(err);

@@ -2,11 +2,8 @@ export const BOOKING_STATUS = {
   PENDING_PAYMENT:    "PENDING_PAYMENT",
   CONFIRMED:          "CONFIRMED",
   CHECKED_IN:         "CHECKED_IN",
-  IN_PROGRESS:        "IN_PROGRESS",
   COMPLETED:          "COMPLETED",
   CANCELLED:          "CANCELLED",
-  CANCELLED_TIMEOUT:  "CANCELLED_TIMEOUT",
-  CANCELLED_NO_SHOW:  "CANCELLED_NO_SHOW",
 } as const;
 
 export type BookingStatus = typeof BOOKING_STATUS[keyof typeof BOOKING_STATUS];

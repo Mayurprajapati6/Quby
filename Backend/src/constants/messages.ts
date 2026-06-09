@@ -1,5 +1,7 @@
 export const AUTH_MESSAGES = {
   INVALID_CREDENTIALS:  "Invalid email or password.",
+  EMAIL_NOT_FOUND:      "No account found with this email address.",
+  WRONG_PASSWORD:       "Incorrect password. Please try again.",
   ACCOUNT_DEACTIVATED:  "Your account has been deactivated. Please contact support.",
   UNAUTHORIZED:         "Authentication required. Please login.",
   TOKEN_EXPIRED:        "Your session has expired. Please login again.",

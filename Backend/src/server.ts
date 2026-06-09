@@ -18,6 +18,7 @@ import v2Router from "./routers/v2/index.router";
 import { startWorkers, stopWorkers } from "./workers";
 
 const app        = express();
+app.set("trust proxy", 1);
 const httpServer = createServer(app);
 
 app.use(helmet({ crossOriginResourcePolicy: { policy: "cross-origin" } }));

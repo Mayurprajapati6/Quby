@@ -20,6 +20,7 @@
     "@prisma/adapter-pg": "^7.3.0",
     "@prisma/client": "^7.3.0",
     "@socket.io/redis-adapter": "^8.3.0",
+    "axios": "^1.16.0",
     "bcryptjs": "^3.0.3",
     "bullmq": "^5.70.1",
     "cloudinary": "^2.9.0",
