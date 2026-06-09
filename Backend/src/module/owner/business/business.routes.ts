@@ -3,7 +3,6 @@ import { OwnerBusinessController } from "./business.controller";
 import { validateRequestBody } from "../../../validators";
 import { uploadFields, uploadArray, handleMulterError } from "../../../utils/helpers/multer";
 import { createBusinessSchema, updateBusinessSchema } from "./business.validator";
-import { businessAccountRouter } from "../../auth/business-auth.routes";
 import { ownerBusinessStaffRouter } from "../business-staff/business-staff.routes";
 import { businessServicesRouter } from "../business-services/business-services.routes";
 import { scheduleRouter } from "../schedule/schedule.routes";
@@ -54,8 +53,6 @@ ownerBusinessRouter.post(
   "/:businessId/submit-verification",
   OwnerBusinessController.submitForVerification,
 );
-
-ownerBusinessRouter.use("/:businessId/account", businessAccountRouter);
 
 ownerBusinessRouter.use("/:businessId/staff", ownerBusinessStaffRouter);
 

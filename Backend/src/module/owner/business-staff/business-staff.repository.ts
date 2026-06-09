@@ -30,8 +30,8 @@ export class BusinessStaffRepository {
         ...(filters.name && { name: { contains: filters.name, mode: "insensitive" } }),
       },
       include: {
-        user:      { select: { id: true, is_suspended: true } },
-        services:  { include: { service_offering: { include: { platform_service: { select: { name: true } } } } } },
+        user:      { select: { id: true } },
+        services:  { include: { service_offering: { include: { platform_service: { select: { name: true, image_url: true } } } } } },
         schedules: true,
         _count:    { select: { bookings: { where: { service_date: today } } } },
       },
@@ -62,7 +62,13 @@ export class BusinessStaffRepository {
     return prisma.staff.findMany({
       where,
       include: {
-        business: { select: { id: true, business_name: true } },
+        business: {
+  select: {
+    id: true,
+    business_name: true,
+    logo_url: true, // ✅ ADD
+  },
+},
         user:     { select: { id: true } },
         _count:   { select: { bookings: { where: { service_date: today } } } },
       },
@@ -71,25 +77,59 @@ export class BusinessStaffRepository {
   }
 
   static async findByOwnerAndStaff(userId: string, staffId: string) {
-    const businessIds = await this.getOwnerBusinessIds(userId);
-    if (!businessIds.length) return null;
+  const businessIds = await this.getOwnerBusinessIds(userId);
+  if (!businessIds.length) return null;
 
-    return prisma.staff.findFirst({
-      where: { id: staffId, business_id: { in: businessIds } },
-      include: {
-        business:  { select: { id: true, business_name: true } },
-        user:      { select: { id: true, email: true } },
-        services:  {
-          include: {
-            service_offering: {
-              include: { platform_service: { select: { id: true, name: true, category: true } } },
+  // ✅ 1. Fetch staff
+  const staff = await prisma.staff.findFirst({
+    where: { id: staffId, business_id: { in: businessIds } },
+    include: {
+      business: {
+  select: {
+    id: true,
+    business_name: true,
+    logo_url: true, // ✅ ADD
+  },
+},
+      user: { select: { id: true, email: true } },
+      services: {
+        include: {
+          service_offering: {
+            include: {
+              platform_service: {
+                select: { id: true, name: true, category: true, image_url: true },
+              },
             },
           },
         },
-        schedules: { orderBy: { day_of_week: "asc" } },
       },
-    });
-  }
+      schedules: { orderBy: { day_of_week: "asc" } },
+    },
+  });
+
+  if (!staff) return null;
+
+  // ✅ 2. LIFETIME STATS (THIS IS WHAT YOU WANT)
+  const stats = await prisma.booking.aggregate({
+    where: {
+      staff_id: staffId,
+      status: "COMPLETED",
+    },
+    _count: { id: true },
+    _sum: { service_amount: true },
+  });
+
+  
+
+  // ✅ 3. RETURN WITH STATS (THIS WAS MISSING)
+  return {
+    ...staff,
+    stats: {
+      completed_bookings: stats._count.id ?? 0,
+      revenue_inr: stats._sum.service_amount ?? 0,
+    },
+  };
+}
 
   static async createStaffWithUser(data: {
     business_id:       string;

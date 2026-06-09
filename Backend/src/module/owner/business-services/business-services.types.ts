@@ -5,6 +5,7 @@ export interface BusinessServiceOfferingDTO {
     name:        string;
     service_for: string;
     category:    string;
+    image_url:   string | null;
   };
   price:            number;
   discounted_price: number | null;

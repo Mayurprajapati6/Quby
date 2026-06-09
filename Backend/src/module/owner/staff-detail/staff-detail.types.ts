@@ -58,8 +58,8 @@ export interface StaffDetailDTO {
   recent_reviews: Array<{
     id:             string;
     customer_name:  string;
-    staff_rating:   number;
-    staff_comment:  string | null;
+    rating:   number;
+    comment: string | null;
     service_date:   string;
     created_at:     string;
   }>;

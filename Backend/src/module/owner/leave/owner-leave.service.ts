@@ -1,7 +1,7 @@
 import { prisma } from "../../../config/prisma";
 import { OwnerLeaveRepository } from "./owner-leave.repository";
 import { emitToUser } from "../../../socket/socket.service";
-import { queueEmail } from "../../../services/email.services";
+import { queueEmail, sendEmail } from "../../../services/email.services";
 import {
   NotFoundError,
   BadRequestError,
@@ -42,6 +42,7 @@ export class OwnerLeaveService {
       staff_name:       l.staff.name,
       staff_avatar:     l.staff.avatar_url ?? null,
       business_id:      l.staff.business.id,
+      business_logo:    l.staff.business.logo_url ?? null,
       business_name:    l.staff.business.business_name,
       leave_type:       l.leave_type,
       start_date:       toISTDate(l.start_date),
@@ -91,7 +92,7 @@ export class OwnerLeaveService {
         where: {
           staff_id:     leave.staff_id,
           service_date: { gte: leave.start_date, lte: leave.end_date },
-          status:       { in: ["CONFIRMED", "CHECKED_IN"] },
+          status:       { in: ["CONFIRMED"] },
         },
       });
       if (conflictCount > 0) {
@@ -144,10 +145,11 @@ export class OwnerLeaveService {
       });
     }
 
-    queueEmail({
-      to:   leave.staff.email,
-      type: dto.action === "APPROVED" ? "leave-approved-staff" : "leave-rejected-staff",
-      data: {
+    // Send immediately (not queued) — critical notification staff must receive ASAP
+    sendEmail(
+      leave.staff.email,
+      dto.action === "APPROVED" ? "leave-approved-staff" : "leave-rejected-staff",
+      {
         staffName:        leave.staff.name,
         ownerName:        ownerName,
         startDate:        toISTDate(leave.start_date),
@@ -156,7 +158,7 @@ export class OwnerLeaveService {
         action:           dto.action,
         rejectionReason:  dto.rejection_reason ?? null,
       },
-    }).catch(err => logger.warn("[OwnerLeave] Leave email failed:", err));
+    ).catch(err => logger.warn("[OwnerLeave] Leave email failed:", err));
 
     return this.toDTO({ ...updated, staff: leave.staff });
   }

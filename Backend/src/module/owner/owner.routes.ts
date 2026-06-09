@@ -12,10 +12,9 @@ import { ownerLeaveRouter } from "./leave/owner-leave.routes";
 import { ownerDashboardRouter } from "./dashboard/owner-dashboard.routes";
 import { ownerBookingsRouter } from "./bookings/owner-bookings.routes";
 import { ownerReviewsRouter } from "./reviews/owner-reviews.routes";
-import { ownerWalletRouter } from "./wallet/owner-wallet.routes";
-import { ownerEscrowRouter } from "./escrow/owner-escrow.routes";
-import { ownerAttendanceRouter } from "./attendance/owner-attendance.routes";
 import { staffDetailRouter } from "./staff-detail/staff-detail.routes";
+import { PlatformServicesRepository } from "../../module/admin/platform-services/platform-services.repository";
+import { successResponse } from "../../utils/helpers/response";
 
 export const ownerRouter = Router();
 
@@ -34,16 +33,25 @@ ownerRouter.patch(
 ownerRouter.post("/logout", OwnerController.logout);
 
 ownerRouter.patch("/notifications/read-all", OwnerController.markAllNotificationsRead);
-ownerRouter.get("/notifications", OwnerController.getNotifications);
-ownerRouter.patch("/notifications/:id/read", OwnerController.markNotificationRead);
+ownerRouter.get("/notifications",             OwnerController.getNotifications);
+ownerRouter.patch("/notifications/:id/read",  OwnerController.markNotificationRead);
 
-ownerRouter.use("/businesses", ownerBusinessRouter);   
-ownerRouter.use("/staff", ownerStaffRouter);      
-ownerRouter.use("/leave", ownerLeaveRouter);      
-ownerRouter.use("/dashboard", ownerDashboardRouter);  
-ownerRouter.use("/bookings", ownerBookingsRouter);   
-ownerRouter.use("/reviews", ownerReviewsRouter);    
-ownerRouter.use("/wallet", ownerWalletRouter);     
-ownerRouter.use("/escrow", ownerEscrowRouter);     
-ownerRouter.use("/attendance", ownerAttendanceRouter); 
-ownerRouter.use("/staff-detail", staffDetailRouter);    
+// ── Platform services — read-only for owners to build their service menu ──
+ownerRouter.get("/platform-services", async (req: any, res, next) => {
+  try {
+    const { service_for, is_active } = req.query as Record<string, string>;
+    const services = await PlatformServicesRepository.findAll({
+      service_for: service_for as "MEN" | "UNISEX" | undefined,
+      is_active:   is_active !== undefined ? is_active === "true" : true, // default: only active
+    });
+    res.json(successResponse(services));
+  } catch (err) { next(err); }
+});
+
+ownerRouter.use("/businesses",   ownerBusinessRouter);
+ownerRouter.use("/staff",        ownerStaffRouter);
+ownerRouter.use("/leave",        ownerLeaveRouter);
+ownerRouter.use("/dashboard",    ownerDashboardRouter);
+ownerRouter.use("/bookings",     ownerBookingsRouter);
+ownerRouter.use("/reviews",      ownerReviewsRouter);
+ownerRouter.use("/staff-detail", staffDetailRouter);

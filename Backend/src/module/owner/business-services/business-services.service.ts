@@ -119,6 +119,7 @@ function toDTO(o: any): BusinessServiceOfferingDTO {
       name:        o.platform_service.name,
       service_for: o.platform_service.service_for,
       category:    o.platform_service.category,
+      image_url:   o.platform_service.image_url ?? null,
     },
     price:            o.price,
     discounted_price: o.discounted_price,

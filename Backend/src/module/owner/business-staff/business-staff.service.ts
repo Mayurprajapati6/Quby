@@ -51,6 +51,8 @@ export class BusinessStaffService {
       today_bookings:   (s as any)._count?.bookings ?? 0,
       business_id:      s.business.id,
       business_name:    s.business.business_name,
+      business_logo: s.business.logo_url ?? null,
+joined_date: s.created_at,
     }));
   }
 
@@ -72,14 +74,29 @@ export class BusinessStaffService {
       average_rating:   s.average_rating ?? 0,
       total_reviews:    s.total_reviews  ?? 0,
       today_bookings:   (s as any)._count?.bookings ?? 0,
+      joined_date: s.created_at,
     }));
   }
 
   static async getStaff(userId: string, staffId: string) {
-    const staff = await BusinessStaffRepository.findByOwnerAndStaff(userId, staffId);
-    if (!staff) throw new NotFoundError("Staff member not found.");
-    return staff;
-  }
+  const staff = await BusinessStaffRepository.findByOwnerAndStaff(userId, staffId);
+
+  if (!staff) throw new NotFoundError("Staff member not found.");
+
+  // ✅ FIX: convert paise → rupees
+  const stats = staff.stats
+    ? {
+        ...staff.stats,
+        revenue_inr: Math.floor((staff.stats.revenue_inr ?? 0) / 100),
+      }
+    : null;
+
+  return {
+  ...staff,
+  business_logo: staff.business.logo_url ?? null,
+  stats,
+};
+}
 
   static async createStaff(
     userId:      string,
@@ -175,7 +192,7 @@ export class BusinessStaffService {
       const activeCount = await prisma.booking.count({
         where: {
           staff_id: staffId,
-          status:   { in: ["CONFIRMED", "CHECKED_IN", "IN_PROGRESS"] },
+          status:   { in: ["CONFIRMED", "RUNNING"] },
         },
       });
       if (activeCount > 0) {
@@ -194,7 +211,7 @@ export class BusinessStaffService {
     if (!staff) throw new NotFoundError("Staff member not found.");
 
     const activeCount = await prisma.booking.count({
-      where: { staff_id: staffId, status: { in: ["CONFIRMED", "CHECKED_IN", "IN_PROGRESS"] } },
+      where: { staff_id: staffId, status: { in: ["CONFIRMED", "RUNNING"] } },
     });
     if (activeCount > 0) {
       throw new BadRequestError(
@@ -301,7 +318,7 @@ export class BusinessStaffService {
         where: {
           staff_id:     leave.staff_id,
           service_date: { gte: leave.start_date, lte: leave.end_date },
-          status:       { in: ["CONFIRMED", "CHECKED_IN"] },
+          status:       { in: ["CONFIRMED"] },
         },
       });
       if (conflictCount > 0) {

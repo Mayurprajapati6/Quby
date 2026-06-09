@@ -19,7 +19,7 @@ export class StaffDetailRepository {
         services:  {
           include: {
             service_offering: {
-              include: { platform_service: { select: { id: true, name: true, category: true } } },
+              include: { platform_service: { select: { id: true, name: true, category: true, image_url: true } } },
             },
           },
           orderBy: { is_available: "desc" },
@@ -31,69 +31,77 @@ export class StaffDetailRepository {
 
   // ── Period-filtered booking stats ────────────────────────────────────────────
 
-  static async getPeriodStats(staffId: string, period: "week" | "month" | "year") {
-    const now   = new Date();
-    const start = period === "week"
-      ? startOfWeek(now, { weekStartsOn: 1 })
-      : period === "month"
-        ? startOfMonth(now)
-        : startOfYear(now);
+  static async getPeriodStats(
+  staffId: string,
+  _period: "week" | "month" | "year"
+) {
+  const bookings = await prisma.booking.findMany({
+    where: {
+      staff_id: staffId, // ✅ ALL TIME
+    },
+    select: { status: true, service_amount: true },
+  });
 
-    const bookings = await prisma.booking.findMany({
-      where: {
-        staff_id:     staffId,
-        service_date: { gte: start },
-      },
-      select: { status: true, service_amount: true },
-    });
+  const completed  = bookings.filter(b => b.status === "COMPLETED");
+  const cancelled  = bookings.filter(b => b.status === "CANCELLED");
+  const noShow     = bookings.filter(b => b.status === "NO_SHOW");
 
-    const completed  = bookings.filter(b => b.status === "COMPLETED");
-    const cancelled  = bookings.filter(b => b.status === "CANCELLED" || b.status === "CANCELLED_TIMEOUT");
-    const noShow     = bookings.filter(b => b.status === "CANCELLED_NO_SHOW");
-    const revenue    = completed.reduce((s: number, b: any) => s + (b.service_amount ?? 0), 0);
+  const revenue = completed.reduce(
+    (s: number, b: any) => s + (b.service_amount ?? 0),
+    0
+  );
 
-    const denom    = completed.length + cancelled.length + noShow.length;
-    const accuracy = denom > 0 ? Math.round(completed.length / denom * 100) : 100;
+  const denom    = completed.length + cancelled.length + noShow.length;
+  const accuracy = denom > 0 ? Math.round((completed.length / denom) * 100) : 100;
 
-    // Timing performance from StaffPerformance monthly records
-    const perfRecords = await prisma.staffPerformance.findMany({
-      where: { staff_id: staffId, month: { gte: start } },
-    });
+  // ALL TIME performance
+  const perfRecords = await prisma.staffPerformance.findMany({
+    where: { staff_id: staffId },
+  });
 
-    const totalBookingsPerf   = perfRecords.reduce((s, r) => s + r.total_bookings, 0);
-    const totalActualMins     = perfRecords.reduce((s, r) => s + r.total_actual_minutes, 0);
-    const totalEstimatedMins  = perfRecords.reduce((s, r) => s + r.total_estimated_minutes, 0);
-    const totalOnTime         = perfRecords.reduce((s, r) => s + r.on_time_count, 0);
-    const totalEffSum         = perfRecords.reduce((s, r) => s + r.average_efficiency * r.total_bookings, 0);
+  const totalBookingsPerf   = perfRecords.reduce((s, r) => s + r.total_bookings, 0);
+  const totalActualMins     = perfRecords.reduce((s, r) => s + r.total_actual_minutes, 0);
+  const totalEstimatedMins  = perfRecords.reduce((s, r) => s + r.total_estimated_minutes, 0);
+  const totalOnTime         = perfRecords.reduce((s, r) => s + r.on_time_count, 0);
+  const totalEffSum         = perfRecords.reduce(
+    (s, r) => s + r.average_efficiency * r.total_bookings,
+    0
+  );
 
-    const avgTakenMin      = totalBookingsPerf > 0 ? Math.round(totalActualMins    / totalBookingsPerf) : 0;
-    const avgEstimatedMin  = totalBookingsPerf > 0 ? Math.round(totalEstimatedMins / totalBookingsPerf) : 0;
-    const avgEfficiencyPct = totalBookingsPerf > 0 ? Math.round(totalEffSum        / totalBookingsPerf) : 100;
-    const onTimePct        = totalBookingsPerf > 0 ? Math.round(totalOnTime        / totalBookingsPerf * 100) : 100;
+  const avgTakenMin      = totalBookingsPerf > 0 ? Math.round(totalActualMins / totalBookingsPerf) : 0;
+  const avgEstimatedMin  = totalBookingsPerf > 0 ? Math.round(totalEstimatedMins / totalBookingsPerf) : 0;
+  const avgEfficiencyPct = totalBookingsPerf > 0 ? Math.round(totalEffSum / totalBookingsPerf) : 100;
+  const onTimePct        = totalBookingsPerf > 0 ? Math.round((totalOnTime / totalBookingsPerf) * 100) : 100;
 
-    // Rating for this period
-    const rating = await prisma.review.aggregate({
-      where:  { staff_id: staffId, created_at: { gte: start } },
-      _avg:   { staff_rating: true },
-      _count: { id: true },
-    });
+  // ALL TIME rating
+  const rating = await prisma.review.aggregate({
+    where: { staff_id: staffId },
+    _avg:   { rating: true },
+    _count: { id: true },
+  });
 
-    return {
-      period,
-      total_bookings:     bookings.length,
-      completed_bookings: completed.length,
-      cancelled_bookings: cancelled.length,
-      no_show_bookings:   noShow.length,
-      revenue_inr:        revenue / 100,
-      accuracy_percent:   accuracy,
-      avg_rating:         Math.round((rating._avg.staff_rating ?? 0) * 10) / 10,
-      total_reviews:      rating._count.id,
-      avg_taken_min:      avgTakenMin,
-      avg_estimated_min:  avgEstimatedMin,
-      avg_efficiency_pct: avgEfficiencyPct,
-      on_time_pct:        onTimePct,
-    };
-  }
+  return {
+    // ✅ REQUIRED FOR TYPE (but now logical)
+    period: "lifetime",
+
+    total_bookings:     bookings.length,
+    completed_bookings: completed.length,
+    cancelled_bookings: cancelled.length,
+    no_show_bookings:   noShow.length,
+
+    // ⚠️ keep paise
+    revenue_inr: revenue,
+
+    accuracy_percent:   accuracy,
+    avg_rating:         Math.round((rating._avg.rating ?? 0) * 10) / 10,
+    total_reviews:      rating._count.id,
+
+    avg_taken_min:      avgTakenMin,
+    avg_estimated_min:  avgEstimatedMin,
+    avg_efficiency_pct: avgEfficiencyPct,
+    on_time_pct:        onTimePct,
+  };
+}
 
   // ── Recent bookings ───────────────────────────────────────────────────────────
 

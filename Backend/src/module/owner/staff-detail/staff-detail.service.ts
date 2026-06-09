@@ -54,6 +54,7 @@ export class StaffDetailService {
         id:               sv.service_offering.id,
         name:             sv.service_offering.platform_service.name,
         category:         sv.service_offering.platform_service.category ?? null,
+        image_url:        (sv.service_offering.platform_service as any).image_url ?? null,
         duration_minutes: sv.duration_minutes,
         is_available:     sv.is_available,
         price:            sv.service_offering.price,
@@ -67,7 +68,10 @@ export class StaffDetailService {
         end_time:     s.end_time   ?? null,
       })),
 
-      stats,
+      stats: {
+  ...stats,
+  revenue_inr: Math.floor((stats.revenue_inr ?? 0) / 100),
+},
 
       recent_bookings: recentBookings.map(b => ({
         id:             b.id,
@@ -83,8 +87,8 @@ export class StaffDetailService {
       recent_reviews: recentReviews.map(r => ({
         id:            r.id,
         customer_name: r.customer.name,
-        staff_rating:  r.staff_rating,
-        staff_comment: r.staff_comment ?? null,
+        rating:  r.rating,
+        comment:      r.comment      ?? null,
         service_date:  toISTDate(r.booking.service_date),
         created_at:    toIST(r.created_at),
       })),

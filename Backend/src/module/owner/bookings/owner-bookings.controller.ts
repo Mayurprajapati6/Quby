@@ -4,7 +4,14 @@ import { successResponse } from "../../../utils/helpers/response";
 import { BadRequestError } from "../../../utils/errors/app.error";
 import type { AuthRequest } from "../../../middlewares/types";
 
-const VALID_TABS = ["running", "today", "upcoming", "past"] as const;
+const VALID_TABS = [
+  "running",
+  "today",
+  "upcoming",
+  "completed",
+  "no_show",
+  "refund"
+] as const;
 
 export class OwnerBookingsController {
 

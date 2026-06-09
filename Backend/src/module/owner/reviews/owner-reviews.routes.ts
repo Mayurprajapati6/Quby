@@ -5,11 +5,10 @@ import { respondToReviewSchema } from "../../../validators/review.validator";
 
 export const ownerReviewsRouter = Router();
 
-ownerReviewsRouter.get("/business", OwnerReviewsController.getBusinessReviews);
-ownerReviewsRouter.get("/staff", OwnerReviewsController.getStaffReviews);
+ownerReviewsRouter.get("/", OwnerReviewsController.getReviews);
 
 ownerReviewsRouter.post(
   "/:reviewId/respond",
   validateRequestBody(respondToReviewSchema),
-  OwnerReviewsController.respondToReview,
+  OwnerReviewsController.respond,
 );

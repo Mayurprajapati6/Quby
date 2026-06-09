@@ -2,10 +2,34 @@ import { prisma } from "../../../config/prisma";
 import { OwnerBookingsRepository } from "./owner-bookings.repository";
 import { NotFoundError } from "../../../utils/errors/app.error";
 import { formatInTimeZone } from "date-fns-tz";
+import { addMinutes } from "date-fns";
+import {
+  bookingWindowStart,
+  deriveArrivalWindowEnd,
+  deriveArrivalWindowStart,
+  deriveScanWindowEnd,
+  deriveServiceEnd,
+} from "../../../utils/helpers/timeWindows";
 
 const IST = "Asia/Kolkata";
 function toIST(d: Date)     { return formatInTimeZone(d, IST, "yyyy-MM-dd'T'HH:mm:ssxxx"); }
 function toISTDate(d: Date) { return formatInTimeZone(d, IST, "yyyy-MM-dd"); }
+
+/**
+ * Derive all time windows from service_start_time (single source of truth).
+ * Never use stored arrival_window_start/end or service_end_time directly.
+ */
+function deriveWindows(serviceStart: Date, estimatedDuration: number) {
+ return {
+  arrival_window_start: deriveArrivalWindowStart(serviceStart),
+
+  arrival_window_end: deriveArrivalWindowEnd(serviceStart),
+
+  scan_window_end: deriveScanWindowEnd(serviceStart),
+
+  service_end_time: deriveServiceEnd(serviceStart, estimatedDuration),
+};
+}
 
 export class OwnerBookingsService {
 
@@ -26,11 +50,11 @@ export class OwnerBookingsService {
   static async getBookings(
     userId: string,
     opts: {
-      tab:          "running" | "today" | "upcoming" | "past";
+      tab: "running" | "today" | "upcoming" | "completed" | "no_show" | "refund";
       business_id?: string;
-      date?:        string;
-      page:         number;
-      limit:        number;
+      date?: string;
+      page: number;
+      limit: number;
     },
   ) {
     const businessIds = await this.getBusinessIds(userId);
@@ -40,24 +64,97 @@ export class OwnerBookingsService {
       ...opts,
     });
 
+    let finalBookings = bookings;
+
+    if (opts.tab === "refund") {
+      finalBookings = bookings.sort((a: any, b: any) => {
+        const order: Record<string, number> = { REFUND_INITIATED: 0, REFUNDED: 1 };
+        const aOrder = order[a.status] ?? 2;
+        const bOrder = order[b.status] ?? 2;
+        if (aOrder !== bOrder) return aOrder - bOrder;
+        return new Date(b.created_at).getTime() - new Date(a.created_at).getTime();
+      });
+    }
+
     return {
-      bookings: bookings.map(b => ({
-        id:             b.id,
-        booking_number: b.booking_number,
-        business_name:  b.business.business_name,
-        customer_name:  b.customer.name,
-        customer_phone: b.customer.phone    ?? null,
-        customer_avatar: b.customer.avatar_url ?? null,
-        staff_name:     b.staff.name,
-        staff_avatar:   b.staff.avatar_url  ?? null,
-        service_date:   toISTDate(b.service_date),
-        service_start_time: toIST(b.service_start_time),
-        services:       Array.isArray(b.services) ? (b.services as any[]).map(s => s.name ?? "") : [],
-        status:         b.status,
-        service_amount: (b as any).service_amount,
-        platform_fee:   (b as any).platform_fee      ?? 0,
-        total_amount:   (b as any).total_amount,
-      })),
+      bookings: finalBookings.map(b => {
+        const bk    = b as any;
+        const rawStart = new Date(b.service_start_time);
+        const start = bookingWindowStart(rawStart);
+        const windows = deriveWindows(rawStart, b.estimated_duration);
+
+        return {
+          id:             b.id,
+          booking_number: b.booking_number,
+          // ✅ Business with logo
+          business_name: bk.business?.business_name ?? "",
+          business_logo: bk.business?.logo_url      ?? null,
+          // ✅ Customer
+          customer_name:   bk.customer?.name       ?? "",
+          customer_phone:  bk.customer?.phone       ?? null,
+          customer_avatar: bk.customer?.avatar_url  ?? null,
+          // ✅ Staff
+          staff_name:   bk.staff?.name       ?? "",
+          staff_avatar: bk.staff?.avatar_url  ?? null,
+          // ✅ Schedule
+          service_date:         toISTDate(b.service_date),
+          service_start_time:   toIST(start),
+          arrival_window_start: toIST(windows.arrival_window_start),
+
+          arrival_window_end: toIST(
+  windows.arrival_window_end
+),
+
+scan_window_end: toIST(
+  windows.scan_window_end
+),
+
+service_end_time: toIST(
+  windows.service_end_time
+),
+service_started_at: bk.service_started_at
+            ? toIST(new Date(bk.service_started_at)) : null,
+          // ✅ actual times for timeline
+          actual_start_time: bk.service_started_at
+            ? toIST(new Date(bk.service_started_at))
+            : null,
+          actual_end_time: bk.service_completed_at
+            ? toIST(new Date(bk.service_completed_at))
+            : null,
+          checked_in_at: bk.checked_in_at
+            ? toIST(new Date(bk.checked_in_at))
+            : null,
+          estimated_duration: b.estimated_duration,
+          actual_duration:    bk.actual_duration ?? null,
+          queue_number:       b.queue_number,
+          // ✅ Services as full objects with image_url — NOT plain strings
+          services: Array.isArray(b.services)
+            ? (b.services as any[]).map(s => ({
+                name:             s.name             ?? "",
+                duration_minutes: s.duration_minutes ?? null,
+                price:            s.price            ?? null,   
+                image_url:        s.image_url        ?? null,
+              }))
+            : [],
+          status:         b.status,
+          
+          service_amount: b.service_amount,
+          payment: bk.payment ? {
+            status:        bk.payment.status,
+            
+            amount:        bk.payment.amount,
+            refund_status: bk.payment.refund_status,
+            refund_amount: bk.payment.refund_amount ?? null,
+          } : null,
+          // ✅ review for star display on completed cards
+          has_review: !!(bk.review),
+          review_rating: bk.review?.rating ?? null,
+          // ✅ cancellation info
+          cancellation_reason: b.cancellation_reason ?? null,
+          cancelled_at: bk.cancelled_at ? toIST(new Date(bk.cancelled_at)) : null,
+          cancellable_until:   bk.cancellable_until ? toIST(new Date(bk.cancellable_until)) : null,
+        };
+      }),
       pagination: {
         total,
         page:        opts.page,
@@ -72,48 +169,93 @@ export class OwnerBookingsService {
     const booking     = await OwnerBookingsRepository.findById(bookingId, businessIds);
     if (!booking) throw new NotFoundError("Booking not found.");
 
+    const b      = booking as any;
+    const rawStart = new Date(booking.service_start_time);
+    const start  = bookingWindowStart(rawStart);
+    const windows = deriveWindows(rawStart, booking.estimated_duration);
+
     return {
       id:                   booking.id,
       booking_number:       booking.booking_number,
-      business_name:        booking.business.business_name,
+      // ✅ Business with logo
+      business_name: booking.business.business_name,
+      business_logo: (booking.business as any).logo_url ?? null,
+      // ✅ Customer
       customer: {
         id:         booking.customer.id,
         name:       booking.customer.name,
         phone:      booking.customer.phone      ?? null,
         avatar_url: booking.customer.avatar_url ?? null,
       },
+      // ✅ Staff
       staff: {
         id:         booking.staff.id,
         name:       booking.staff.name,
-        phone:      (booking.staff as any).phone ?? null,
-        avatar_url: booking.staff.avatar_url     ?? null,
+        phone:      b.staff.phone      ?? null,
+        avatar_url: booking.staff.avatar_url ?? null,
       },
+      // ✅ Schedule — derived windows
       service_date:         toISTDate(booking.service_date),
-      service_start_time:       toIST(booking.service_start_time),
-      arrival_window_start: toIST(booking.arrival_window_start),
-      arrival_window_end:   toIST(booking.arrival_window_end),
-      service_end_time:     toIST(booking.service_end_time),
-      services:             Array.isArray((booking as any).services)
-        ? (booking as any).services.map((s: any) => ({
-            name:             s.name ?? "",
+      service_start_time:   toIST(start),
+      arrival_window_start: toIST(
+  windows.arrival_window_start
+),
+
+arrival_window_end: toIST(
+  windows.arrival_window_end
+),
+
+scan_window_end: toIST(
+  windows.scan_window_end
+),
+
+service_end_time: toIST(
+  windows.service_end_time
+),
+      estimated_duration:   booking.estimated_duration,
+      queue_number:         booking.queue_number,
+      // ✅ Services with image_url for thumbnail display in modal
+      services: Array.isArray(b.services)
+        ? (b.services as any[]).map((s: any) => ({
+            name:             s.name             ?? "",
             duration_minutes: s.duration_minutes ?? 0,
+            price:            s.price            ?? null,   
+            image_url:        s.image_url        ?? null,
           }))
         : [],
-      status:               booking.status,
-      service_amount:       (booking as any).service_amount,
-      platform_fee:         booking.platform_fee      ?? 0,
-      total_amount:         (booking as any).total_amount,
-      cancellation_reason:  booking.cancellation_reason ?? null,
-      qr_image_url:         (booking as any).qr_code?.qr_image_url ?? null,
-      escrow: booking.escrow ? {
-            id:                (booking.escrow as any).id,
-            status:            (booking.escrow as any).status,
-            amount_inr:        (booking.escrow as any).amount / 100,
-            escrow_release_at: (booking.escrow as any).scheduled_release_at ? toIST(new Date((booking.escrow as any).scheduled_release_at)) : null,
-            released_at:       (booking.escrow as any).released_at           ? toIST(new Date((booking.escrow as any).released_at))          : null,
-          }
-        : null,
-      has_review: !!(booking as any).review,
+      
+      status:              booking.status,
+      service_amount:      b.service_amount,
+      cancellation_reason: booking.cancellation_reason ?? null,
+      cancelled_at:        booking.cancelled_at ? toIST(booking.cancelled_at) : null,
+      qr_image_url:        b.qr_code?.qr_image_url ?? null,
+      
+      payment: b.payment ? {
+        id:                  b.payment.id,
+        status:              b.payment.status,
+        amount:              b.payment.amount,              
+        paid_at:             b.payment.paid_at    ? toIST(new Date(b.payment.paid_at))    : null,
+        settled_at:          b.payment.settled_at ? toIST(new Date(b.payment.settled_at)) : null,
+        refund_status:       b.payment.refund_status ?? null,
+        refund_amount:       b.payment.refund_amount ?? null, 
+        refund_id:           b.payment.refund_id ?? null,
+        razorpay_payment_id: b.payment.razorpay_payment_id ?? null,
+        razorpay_order_id:   b.payment.razorpay_order_id   ?? null,
+      } : null,
+      // ✅ Full timeline fields
+      service_started_at: booking.service_started_at ? toIST(booking.service_started_at)   : null,
+      checked_in_at:    booking.checked_in_at        ? toIST(booking.checked_in_at)        : null,
+      actual_start_time: booking.service_started_at  ? toIST(booking.service_started_at)   : null,
+      actual_end_time:   booking.service_completed_at ? toIST(booking.service_completed_at) : null,
+      actual_duration:   booking.actual_duration      ?? null,
+      cancellable_until: (booking as any).cancellable_until ? toIST(new Date((booking as any).cancellable_until)) : null,
+      cancelled_by:      (booking as any).cancelled_by ?? null,
+      // ✅ Review
+      review: b.review ? {
+        id:      b.review.id,
+        rating:  b.review.rating,
+        comment: b.review.comment ?? null,
+      } : null,
     };
   }
 }

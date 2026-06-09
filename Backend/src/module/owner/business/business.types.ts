@@ -1,7 +1,7 @@
 export interface CreateBusinessDTO {
   business_name:      string;
   business_type?:     string;
-  service_for:        "MEN" | "WOMEN" | "UNISEX";
+  service_for:        "MEN" | "UNISEX";
   description?:       string;
   address_line1:      string;
   address_line2?:     string;

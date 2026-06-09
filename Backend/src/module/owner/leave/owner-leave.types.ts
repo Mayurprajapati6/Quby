@@ -5,10 +5,13 @@ export interface LeaveListItemDTO {
   staff_id:         string;
   staff_name:       string;
   staff_avatar:     string | null;
+
   business_id:      string;
   business_name:    string;
+  business_logo:    string | null; // ✅ ADD
+
   leave_type:       string;
-  start_date:       string;   
+  start_date:       string;
   end_date:         string;
   reason:           string;
   status:           LeaveStatus;

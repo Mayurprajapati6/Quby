@@ -22,7 +22,13 @@ export class OwnerLeaveRepository {
             avatar_url: true,
             email:      true,
             user:       { select: { id: true } },
-            business:   { select: { id: true, business_name: true } },
+            business: {
+  select: {
+    id: true,
+    business_name: true,
+    logo_url: true,
+  },
+},
           },
         },
       },
@@ -40,7 +46,13 @@ export class OwnerLeaveRepository {
             name:       true,
             email:      true,
             user:       { select: { id: true } },
-            business:   { select: { id: true, business_name: true } },
+            business: {
+  select: {
+    id: true,
+    business_name: true,
+    logo_url: true,
+  },
+},
           },
         },
       },

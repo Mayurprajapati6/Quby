@@ -17,7 +17,6 @@ export class OwnerBusinessRepository {
     page:    number,
     limit:   number,
   ) {
-    const today = startOfDay(new Date());
 
     const where: any = {
       owner_id: ownerId,
@@ -35,7 +34,6 @@ export class OwnerBusinessRepository {
             take:    1,
             select:  { image_url: true },
           },
-          wallet: { select: { balance: true } },
           _count: {
             select: {
               staff:    true,
@@ -54,8 +52,16 @@ export class OwnerBusinessRepository {
       by:      ["business_id"],
       where: {
         business_id: { in: businesses.map(b => b.id) },
-        service_date: today,
-        status:       { notIn: ["CANCELLED", "CANCELLED_TIMEOUT", "CANCELLED_NO_SHOW"] },
+        service_date: {
+  gte: startOfDay(new Date()),
+  lt: new Date(new Date().setDate(new Date().getDate() + 1)),
+},
+        status: "COMPLETED",
+payment: {
+  is: {
+    status: "SETTLED",
+  },
+},
       },
       _count: { id: true },
     });
@@ -73,11 +79,36 @@ export class OwnerBusinessRepository {
       activeStaffCounts.map(r => [r.business_id, r._count.id])
     );
 
+    // 🔥 ADD THIS BLOCK (REVENUE CALCULATION)
+const earnings = await prisma.booking.groupBy({
+  by: ["business_id"],
+  where: {
+    business_id: { in: businesses.map(b => b.id) },
+    status: {
+  in: ["COMPLETED", "NO_SHOW"],
+},
+    payment: {
+      is: {
+        status: {
+      in: ["PAID", "SETTLED"],
+    },
+      },
+    },
+  },
+  _sum: {
+    service_amount: true,
+  },
+})
+
+const earningMap = new Map(
+  earnings.map(e => [e.business_id, e._sum.service_amount  ?? 0])
+)
+
     return {
       businesses: businesses.map(b => ({
         ...b,
         primary_image:     b.images[0]?.image_url ?? null,
-        wallet_balance:    b.wallet?.balance       ?? 0,
+        settled_earning: earningMap.get(b.id) ?? 0,
         active_staff_count: staffCountMap.get(b.id) ?? 0,
         today_bookings:    todayCountMap.get(b.id)  ?? 0,
       })),
@@ -96,7 +127,6 @@ export class OwnerBusinessRepository {
           include: { platform_service: { select: { id: true, name: true, category: true } } },
           orderBy: { booking_count: "desc" },
         },
-        wallet: { select: { balance: true, lifetime_earnings: true } },
         _count:  { select: { staff: true, bookings: true, reviews: true } },
       },
     });
@@ -111,7 +141,7 @@ export class OwnerBusinessRepository {
           select: {
             bookings: {
               where: {
-                status: { in: ["CONFIRMED", "CHECKED_IN", "IN_PROGRESS"] },
+                status: { in: ["CONFIRMED", "RUNNING"] },
               },
             },
           },
@@ -122,7 +152,6 @@ export class OwnerBusinessRepository {
 
   static async create(data: {
     ownerId:            string;
-    authUserId?:        string;
     business_name:      string;
     slug:               string;
     business_type:      string;
@@ -153,7 +182,6 @@ export class OwnerBusinessRepository {
     return prisma.business.create({
       data: {
         owner_id:          data.ownerId,
-        auth_user_id:      data.authUserId,
         business_name:     data.business_name,
         slug:              data.slug,
         business_type:     data.business_type as any,
@@ -180,6 +208,8 @@ export class OwnerBusinessRepository {
         cover_image_url:   data.cover_image_url,
         break_time_minutes:        data.break_time_minutes        ?? 5,
         cancellation_window_hours: data.cancellation_window_hours ?? 2,
+        is_verified:               true,
+        is_active:                 true,
       },
     });
   }

@@ -9,16 +9,15 @@ const VALID_PERIODS = ["week", "month", "year"] as const;
 export class OwnerDashboardController {
 
   static async getDashboard(req: AuthRequest, res: Response, next: NextFunction) {
-    try {
-      const period = (req.query.period as string) || "month";
-      if (!VALID_PERIODS.includes(period as any)) {
-        throw new BadRequestError("period must be one of: week, month, year.");
-      }
-      const data = await OwnerDashboardService.getDashboard(
-        req.user!.userId,
-        period as typeof VALID_PERIODS[number],
-      );
-      res.json(successResponse(data));
-    } catch (err) { next(err); }
-  }
+  try {
+    const year = Number(req.query.year) || new Date().getFullYear();
+
+    const data = await OwnerDashboardService.getDashboard(
+      req.user!.userId,
+      year
+    );
+
+    res.json(successResponse(data));
+  } catch (err) { next(err); }
+}
 }

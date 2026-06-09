@@ -51,14 +51,15 @@ export class BusinessService {
         service_for:        b.service_for,
         primary_image:      b.primary_image,
         logo_url:           b.logo_url          ?? null,
-        is_verified:        b.is_verified,
         is_active:          b.is_active,
-        average_rating:     b.average_rating    ?? 0,
-        total_reviews:      b.total_reviews,
-        active_staff_count: b.active_staff_count,
-        total_earning_inr:  (b.wallet_balance ?? 0) / 100,
-        today_bookings:     b.today_bookings,
-        created_at:         toIST(b.created_at),
+        average_rating:      b.average_rating    ?? 0,
+        total_reviews:       b.total_reviews,
+        active_staff_count:  b.active_staff_count,
+        total_earning_inr:   (b.settled_earning ?? 0) / 100,
+        today_bookings:      b.today_bookings,
+        is_verified:         b.is_verified,
+        verification_status: b.is_verified ? "VERIFIED" : null,
+        created_at:          toIST(b.created_at),
       })),
       total,
       page,
@@ -98,7 +99,6 @@ export class BusinessService {
 
     const business = await Repo.create({
       ownerId:           owner.id,
-      authUserId:        undefined,
       business_name:     dto.business_name,
       slug,
       business_type:     dto.business_type ?? "SALON",
@@ -267,13 +267,14 @@ export class BusinessService {
       );
     }
 
-    const heldEscrow = await prisma.escrowTransaction.count({
-      where: { business_id: businessId, status: "HELD" },
+    // Check for active (PAID) payments not yet settled
+    const activePaid = await prisma.payment.count({
+      where: { business_id: businessId, status: "PAID" },
     });
-    if (heldEscrow > 0) {
+    if (activePaid > 0) {
       throw new BadRequestError(
-        `Cannot delete: ${heldEscrow} payment(s) are held in escrow. ` +
-        "Please wait for them to be released or refunded."
+        `Cannot delete: ${activePaid} payment(s) are pending settlement. ` +
+        "Please wait for all services to complete."
       );
     }
 
@@ -281,10 +282,6 @@ export class BusinessService {
       .map((img: any) => img.public_id)
       .filter(Boolean);
     if (publicIds.length) await bulkDeleteFromCloudinary(publicIds).catch(() => {});
-
-    if ((business as any).auth_user_id) {
-      await prisma.user.delete({ where: { id: (business as any).auth_user_id } }).catch(() => {});
-    }
 
     await Repo.delete(businessId);
 
@@ -294,33 +291,14 @@ export class BusinessService {
     });
   }
 
+
   static async submitForVerification(userId: string, businessId: string) {
     const owner    = await this.resolveOwner(userId);
     const business = await Repo.findByOwnerAndId(owner.id, businessId);
     if (!business) throw new NotFoundError("Business not found.");
-
-    if (business.is_verified) throw new BadRequestError("Business is already verified.");
-
-    const admins = await prisma.admin.findMany({
-      select: { user: { select: { email: true } } },
-    });
-
-    admins.forEach(({ user }) => {
-      queueEmail({
-        to:   user.email,
-        type: "business-submitted",
-        data: {
-          businessName:  business.business_name,
-          ownerName:     owner.name,
-          adminName:     "Admin",
-          adminPanelUrl: `${process.env.CLIENT_URL}/admin/verification/${business.id}`,
-          submittedAt:   new Date().toISOString(),
-        },
-      }).catch(err => logger.warn("[Business] Admin notification failed:", err));
-    });
-
-    return { message: "Submitted for verification.", verification_status: "PENDING" };
+    return { business_id: businessId, message: "Business submitted for verification." };
   }
+
 }
 
 function extractPublicId(url: string): string | undefined {

@@ -1,6 +1,7 @@
 import { prisma } from "../../../config/prisma";
 import { OwnerHolidayRepository as Repo } from "./owner-holiday.repository";
 import { emitToUser } from "../../../socket/socket.service";
+import { queueEmail } from "../../../services/email.services";
 import {
   NotFoundError,
   BadRequestError,
@@ -8,6 +9,9 @@ import {
 } from "../../../utils/errors/app.error";
 import { formatInTimeZone } from "date-fns-tz";
 import { add, startOfDay } from "date-fns";
+import { refundQueue, bookingQueue, settleQueue, notificationQueue } from "../../../config/bullmq";
+import { invalidateSlotCache } from "../../../utils/cache/slotCache";
+import logger from "../../../config/logger.config";
 import type {
   HolidayTab,
   HolidayItemDTO,
@@ -105,6 +109,18 @@ export class OwnerHolidayService {
       end_date:             endDate,
       applies_to_all_staff: appliesAll,
       staff_ids:            dto.staff_ids,
+    });
+
+    // ── BUG FIX: Cancel all CONFIRMED bookings in the holiday date range ──────
+    // Without this, customers would show up to a closed salon.
+    // We cancel with full refund and notify each affected customer.
+    await OwnerHolidayService._cancelBookingsForHoliday({
+      business_id:   dto.business_id,
+      start_date:    startDate,
+      end_date:      endDate,
+      applies_all:   appliesAll,
+      staff_ids:     dto.staff_ids ?? [],
+      holiday_name:  dto.holiday_name,
     });
 
     await this.notifyStaff(dto.business_id, appliesAll, dto.staff_ids ?? [], {
@@ -267,6 +283,165 @@ export class OwnerHolidayService {
         businessName: ownerInfoDel.business_name,
       });
     }
+  }
+
+  // ── Helper: cancel all CONFIRMED bookings in a holiday range ────────────────
+  private static async _cancelBookingsForHoliday(opts: {
+    business_id:  string;
+    start_date:   Date;
+    end_date:     Date;
+    applies_all:  boolean;
+    staff_ids:    string[];
+    holiday_name: string;
+  }): Promise<void> {
+    const { business_id, start_date, end_date, applies_all, staff_ids, holiday_name } = opts;
+    const now = new Date();
+
+    // Build staff filter: all staff if applies_all, otherwise specific staff_ids
+    let staffFilter: any = { business_id };
+    if (!applies_all && staff_ids.length > 0) {
+      staffFilter = { id: { in: staff_ids } };
+    } else {
+      staffFilter = { business_id };
+    }
+
+    const affectedStaff = await prisma.staff.findMany({
+      where:  staffFilter,
+      select: { id: true },
+    });
+    const affectedStaffIds = affectedStaff.map(s => s.id);
+    if (affectedStaffIds.length === 0) return;
+
+    // Find all cancellable bookings in the date range for affected staff
+    const bookings = await prisma.booking.findMany({
+      where: {
+        business_id,
+        staff_id:     { in: affectedStaffIds },
+        service_date: { gte: start_date, lte: end_date },
+        status:       { in: ["CONFIRMED", "PENDING_PAYMENT"] },
+      },
+      include: {
+        customer: { select: { id: true, name: true, user: { select: { id: true, email: true } } } },
+        payment:  { select: { id: true, status: true, amount: true, razorpay_payment_id: true } },
+        business: { select: { business_name: true } },
+      },
+    });
+
+    if (bookings.length === 0) return;
+
+    logger.info(`[HolidayService] Cancelling ${bookings.length} booking(s) for holiday "${holiday_name}" on business ${business_id}`);
+
+    const notifExpiry = add(now, { days: 30 });
+
+    for (const booking of bookings) {
+      try {
+        // Atomic cancel + QR expiry + payment mark
+        await prisma.$transaction(async (tx) => {
+          await tx.booking.update({
+            where: { id: booking.id },
+            data:  {
+              status:              "CANCELLED",
+              cancelled_at:        now,
+              cancelled_by:        "business",
+              cancellation_reason: `Business holiday: ${holiday_name}`,
+            },
+          });
+
+          await tx.qRCode.updateMany({
+            where: { booking_id: booking.id, qr_status: "ACTIVE" },
+            data:  { qr_status: "CANCELLED", is_used: true, expires_at: now },
+          });
+
+          if (booking.payment?.status === "PAID") {
+            await tx.payment.update({
+              where: { booking_id: booking.id },
+              data:  {
+                status:        "REFUNDED",
+                refund_amount: booking.payment.amount,
+                refund_status: "PROCESSING",
+                refund_reason: `Business holiday: ${holiday_name}`,
+              },
+            });
+          } else if (booking.payment?.status === "PENDING") {
+            await tx.payment.update({
+              where: { booking_id: booking.id },
+              data:  { status: "FAILED" },
+            });
+          }
+
+          await tx.customerNotification.create({
+            data: {
+              customer_id: booking.customer_id,
+              type:        "BOOKING_CANCELLED",
+              title:       "Booking Cancelled — Salon Holiday",
+              message:     `Your appointment at ${booking.business.business_name} on ` +
+                           `${formatInTimeZone(booking.service_date, "Asia/Kolkata", "dd MMM yyyy")} ` +
+                           `has been cancelled due to a holiday: ${holiday_name}. ` +
+                           `${booking.payment?.status === "PAID" ? "A full refund will be processed within 5–7 days." : "No charge was made."}`,
+              expires_at:  notifExpiry,
+            },
+          });
+        });
+
+        // Enqueue Razorpay refund (outside transaction — external API call)
+        if (booking.payment?.razorpay_payment_id && booking.payment?.status === "PAID") {
+          await refundQueue.add(
+            `refund:${booking.id}`,
+            {
+              bookingId: booking.id,
+              paymentId: booking.payment.razorpay_payment_id,
+              amount:    booking.payment.amount,
+              reason:    `Business holiday: ${holiday_name}`,
+            },
+            { jobId: `refund:${booking.id}`, attempts: 5 },
+          ).catch(() => {});
+        }
+
+        // Cancel BullMQ scheduled jobs for this booking
+        await Promise.allSettled([
+          bookingQueue.getJob(`payment-timeout:${booking.id}`).then(j => j?.remove()).catch(() => {}),
+          bookingQueue.getJob(`no-show:${booking.id}`).then(j => j?.remove()).catch(() => {}),
+          settleQueue.getJob(`settle:${booking.id}`).then(j => j?.remove()).catch(() => {}),
+          notificationQueue.getJob(`reminder-1hr:${booking.id}`).then(j => j?.remove()).catch(() => {}),
+          notificationQueue.getJob(`reminder-15min:${booking.id}`).then(j => j?.remove()).catch(() => {}),
+        ]);
+
+        // Real-time notification to customer
+        if (booking.customer?.user?.id) {
+          emitToUser(booking.customer.user.id, "booking:cancelled", {
+            bookingId:    booking.id,
+            reason:       "business_holiday",
+            holidayName:  holiday_name,
+          });
+
+          // Email notification
+          queueEmail({
+            to:   booking.customer.user.email,
+            type: "booking-cancelled-by-business",
+            data: {
+              customerName:  booking.customer.name,
+              businessName:  booking.business.business_name,
+              bookingNumber: booking.booking_number,
+              serviceDate:   formatInTimeZone(booking.service_date, "Asia/Kolkata", "dd MMM yyyy"),
+              reason:        `Business holiday: ${holiday_name}`,
+              refundAmount:  booking.payment?.status === "PAID" ? (booking.payment.amount ?? 0) : 0,
+            },
+          }).catch(() => {});
+        }
+
+        // Invalidate slot cache so freed slots are visible
+        await invalidateSlotCache(
+          booking.staff_id,
+          booking.service_date.toISOString().slice(0, 10),
+        ).catch(() => {});
+
+      } catch (err) {
+        logger.error(`[HolidayService] Failed to cancel booking ${booking.id} for holiday:`, err);
+        // Continue with other bookings — don't let one failure block the rest
+      }
+    }
+
+    logger.info(`[HolidayService] Cancelled ${bookings.length} booking(s) for holiday "${holiday_name}"`);
   }
 
   private static async notifyStaff(
