@@ -28,8 +28,7 @@ export interface BusinessCardDTO {
   total_reviews:  number;
   opening_time:   string | null;  
   closing_time:   string | null;  
-  is_open_now:    boolean;
-  is_favourite:   boolean;       
+  is_open_now:    boolean;   
   distance_km?:   number;
 }
 

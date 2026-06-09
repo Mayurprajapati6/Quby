@@ -8,6 +8,7 @@ import type {
   MonthlySpendDTO,
   CalendarEventDTO,
 } from "./customer-dashboard.types";
+import { deriveArrivalEnd, deriveArrivalStart } from "../booking/booking.repository";
 
 const IST = "Asia/Kolkata";
 const MONTH_NAMES = [
@@ -37,30 +38,45 @@ export class CustomerDashboardService {
     const filterYear   = filters.year  ?? now.getFullYear();
 
     const [
-      favouriteCount,
-      pendingReviewCount,
-      nextBooking,
-      recentBookings,
-      pendingReviews,
-      mostBookedSalon,
-      mostBookedStaff,
-      mostBookedService,
-      monthlySpendRaw,
-      calendarRaw,
-      noShowCount,
-    ] = await Promise.all([
-      CustomerDashboardRepository.countFavourites(customer.id),
-      CustomerDashboardRepository.countPendingReviews(customer.id),
-      CustomerDashboardRepository.findNextUpcomingBooking(customer.id),
-      CustomerDashboardRepository.findRecentBookings(customer.id, 5),
-      CustomerDashboardRepository.findPendingReviews(customer.id),
-      CustomerDashboardRepository.findMostBookedSalon(customer.id),
-      CustomerDashboardRepository.findMostBookedStaff(customer.id),
-      CustomerDashboardRepository.findMostBookedService(customer.id),
-      CustomerDashboardRepository.getMonthlySpend(customer.id, filterYear),
-      CustomerDashboardRepository.getCalendarEvents(customer.id, filterMonth, filterYear),
-      prisma.booking.count({ where: { customer_id: customer.id, status: "CANCELLED_NO_SHOW" } }),
-    ]);
+  pendingReviewCount,
+  nextBooking,
+  recentBookings,
+  pendingReviews,
+  mostBookedSalon,
+  mostBookedStaff,
+  mostBookedService,
+  monthlySpendRaw,
+  calendarRaw,
+  noShowCount,
+  spendStats, // ✅ ADD
+  bookingFrequency,
+ bookingBreakdown,
+ serviceUsage,
+ businessFrequency,
+ refundCount,
+ staffFrequency,
+] = await Promise.all([
+  CustomerDashboardRepository.countPendingReviews(customer.id),
+  CustomerDashboardRepository.findNextUpcomingBooking(customer.id),
+  CustomerDashboardRepository.findRecentBookings(customer.id, 5),
+  CustomerDashboardRepository.findPendingReviews(customer.id),
+  CustomerDashboardRepository.findMostBookedSalon(customer.id),
+  CustomerDashboardRepository.findMostBookedStaff(customer.id),
+  CustomerDashboardRepository.findMostBookedService(customer.id),
+  CustomerDashboardRepository.getMonthlySpend(customer.id, filterYear),
+  CustomerDashboardRepository.getCalendarEvents(customer.id, filterMonth, filterYear),
+  prisma.booking.count({ where: { customer_id: customer.id, status: "NO_SHOW" } }),
+
+  // ✅ ADD THIS LINE
+  CustomerDashboardRepository.getSpendStats(customer.id),
+  CustomerDashboardRepository.getBookingFrequency(customer.id, filterYear),
+CustomerDashboardRepository.getBookingBreakdown(customer.id),
+CustomerDashboardRepository.getServiceUsage(customer.id),
+CustomerDashboardRepository.getBusinessFrequency(customer.id),
+CustomerDashboardRepository.getRefundCount(customer.id),
+CustomerDashboardRepository.getStaffFrequency(customer.id),
+
+]);
 
     const monthly_spend: MonthlySpendDTO[] = monthlySpendRaw.map(m => ({
       month:       m.month,
@@ -70,16 +86,47 @@ export class CustomerDashboardService {
       bookings:    m.count,
     }));
 
-    const calendar_events: CalendarEventDTO[] = calendarRaw.map(b => ({
-      booking_id:     b.id,
-      booking_number: b.booking_number,
-      service_date:   toISTDate(b.service_date),
-      service_start_time: toIST(b.service_start_time),
-      business_name:  b.business.business_name,
-      staff_name:     b.staff.name,
-      status:         b.status,
-    }));
+    const calendar_events = calendarRaw.map(b => ({
+  booking_id: b.id,
+  booking_number: b.booking_number,
 
+  service_date: toISTDate(b.service_date),
+  service_start_time: toIST(b.service_start_time),
+
+  business_name: b.business.business_name,
+  business_logo: b.business.logo_url ?? null,
+  business_city: b.business.city,
+  business_state: b.business.state,
+
+  staff_name: b.staff.name,
+  staff_avatar: b.staff.avatar_url ?? null,
+
+  services: Array.isArray((b as any).services)
+    ? (b as any).services.map((s: any) => s.name ?? "")
+    : [],
+
+  amount: ((b as any).service_amount ?? 0) / 100,
+
+  payment_status:
+  (b.payment?.refund_amount ?? 0) > 0
+    ? "REFUNDED"
+    : b.status === "NO_SHOW"
+    ? "FAILED"
+    : "PAID",
+
+  status:
+  b.status === "REFUNDED"
+    ? "REFUNDED"
+    : b.status === "COMPLETED"
+    ? "COMPLETED"
+    : b.status === "NO_SHOW"
+    ? "NO_SHOW"
+    : b.status === "CONFIRMED" || b.status === "RUNNING"
+    ? "CONFIRMED"
+    : "CONFIRMED",
+}))
+console.log("📅 CALENDAR RAW 👉", calendarRaw)
+console.log("📅 CALENDAR EVENTS 👉", calendar_events)
     const upcoming_booking = nextBooking
       ? {
           id:                   nextBooking.id,
@@ -90,8 +137,12 @@ export class CustomerDashboardService {
           staff_avatar:         nextBooking.staff.avatar_url  ?? null,
           service_date:         toISTDate(nextBooking.service_date),
           service_start_time:   toIST(nextBooking.service_start_time),
-          arrival_window_start: toIST(nextBooking.arrival_window_start),
-          arrival_window_end:   toIST(nextBooking.arrival_window_end),
+          arrival_window_start: toIST(
+  deriveArrivalStart(nextBooking.service_start_time)
+),
+arrival_window_end: toIST(
+  deriveArrivalEnd(nextBooking.service_start_time)
+),
           services:             Array.isArray((nextBooking as any).services)
             ? (nextBooking as any).services.map((s: any) => s.name ?? "")
             : [],
@@ -108,19 +159,26 @@ export class CustomerDashboardService {
       service_date:   toISTDate(b.service_date),
       service_start_time: toIST(b.service_start_time),
       status:         b.status,
-      total_amount:   (b as any).total_amount,
+
       has_review:     !!(b as any).review,
     }));
 
     const pending_reviews = pendingReviews.map(b => ({
-      booking_id:     b.id,
-      booking_number: b.booking_number,
-      business_id:    b.business.id,
-      business_name:  b.business.business_name,
-      staff_id:       b.staff.id,
-      staff_name:     b.staff.name,
-      service_date:   toISTDate(b.service_date),
-    }));
+  booking_id:     b.id,
+  booking_number: b.booking_number,
+  business_id:    b.business.id,
+  business_name:  b.business.business_name,
+  staff_id:       b.staff.id,
+  staff_name:     b.staff.name,
+  service_date:   toISTDate(b.service_date),
+
+  // ✅ FIX
+  services: Array.isArray((b as any).services)
+    ? (b as any).services.map((s: any) => s.name ?? "")
+    : [],
+}));
+
+    const liveStats = await CustomerDashboardRepository.getBookingStats(customer.id);
 
     return {
       customer: {
@@ -132,16 +190,28 @@ export class CustomerDashboardService {
         state:      customer.state,
         join_date:  toISTDate(customer.created_at),
       },
-
+      
       stats: {
-        total_bookings:     customer.total_bookings     ?? 0,
-        completed_bookings: customer.completed_bookings ?? 0,
-        cancelled_bookings: customer.cancelled_bookings ?? 0,
-        no_show_bookings:   noShowCount,
-        total_spent_inr:    (customer.total_spent ?? 0) / 100,
-        total_favourites:   favouriteCount,
-        pending_reviews:    pendingReviewCount,
-      },
+  total_bookings:     liveStats.total,
+  completed_bookings: liveStats.completed,
+  cancelled_bookings: liveStats.cancelled,
+  no_show_bookings:   liveStats.no_show,
+
+  upcoming_bookings:  liveStats.upcoming,
+
+  pending_reviews:    pendingReviewCount ?? 0,
+
+  total_spent_inr:    spendStats.total_spent / 100,
+  refunded_inr:       spendStats.refunded_amount / 100,
+  refunded_bookings: refundCount,
+},
+      analytics: {
+  booking_frequency: bookingFrequency,
+  booking_breakdown: bookingBreakdown,
+  service_usage: serviceUsage,
+  business_frequency: businessFrequency,
+  staff_frequency: staffFrequency,
+},
 
       most_booked: {
         salon:   mostBookedSalon,
@@ -154,6 +224,9 @@ export class CustomerDashboardService {
       recent_bookings,
       pending_reviews,
       calendar_events,
+
+      
     };
+    
   }
 }

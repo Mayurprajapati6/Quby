@@ -15,8 +15,7 @@ export class ExploreRepository {
   static async searchBusinesses(
     filters:       ExploreFilters,
     skip:          number,
-    limit:         number,
-    favouriteIds:  Set<string>   
+    limit:         number,   
   ) {
     const nameSearch = filters.name ?? filters.query;
 
@@ -78,11 +77,5 @@ export class ExploreRepository {
     return { businesses, total };
   }
 
-  static async getFavouriteBusinessIds(customerId: string): Promise<Set<string>> {
-    const favs = await prisma.customerFavourite.findMany({
-      where:  { customer_id: customerId },
-      select: { business_id: true },
-    });
-    return new Set(favs.map(f => f.business_id));
-  }
+  
 }

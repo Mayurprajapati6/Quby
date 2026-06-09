@@ -11,7 +11,6 @@ export class CustomerRepository {
             id:            true,
             email:         true,
             last_login_at: true,
-            is_suspended:  true,
             created_at:    true,
           },
         },

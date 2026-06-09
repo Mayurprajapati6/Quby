@@ -42,18 +42,14 @@ export class ExploreService {
     const limit = Math.min(50, filters.limit ?? 10);
     const skip  = (page - 1) * limit;
 
-    const favouriteIds: Set<string> = customerId
-      ? await ExploreRepository.getFavouriteBusinessIds(customerId)
-      : new Set();
-
+    
     const { businesses, total } =
-      await ExploreRepository.searchBusinesses(filters, skip, limit, favouriteIds);
+      await ExploreRepository.searchBusinesses(filters, skip, limit);
 
     let mapped: BusinessCardDTO[] = businesses.map(b => {
       const todaySched = (b as any).schedules?.[0] ?? undefined;
       const primaryImg = (b as any).images?.[0]?.image_url ?? b.logo_url ?? null;
-      const isFav      = favouriteIds.has(b.id);
-
+      
       let distanceKm: number | undefined;
       if (filters.lat != null && filters.lng != null && b.latitude && b.longitude) {
         distanceKm = haversineDistance(filters.lat, filters.lng, b.latitude, b.longitude);
@@ -74,7 +70,6 @@ export class ExploreService {
         opening_time:   todaySched?.open_time   ?? null,
         closing_time:   todaySched?.close_time  ?? null,
         is_open_now:    checkIsOpenNow(todaySched),
-        is_favourite:   isFav,
         distance_km:    distanceKm,
       };
     });
@@ -83,8 +78,6 @@ export class ExploreService {
       mapped = mapped.filter(b => (b.distance_km ?? Infinity) <= filters.radius_km!);
     }
 
-    const favs    = mapped.filter(b => b.is_favourite);
-    const nonFavs = mapped.filter(b => !b.is_favourite);
 
     function sortGroup(arr: BusinessCardDTO[]): BusinessCardDTO[] {
       if (filters.lat != null && filters.lng != null) {
@@ -96,8 +89,6 @@ export class ExploreService {
         (b.average_rating ?? 0) - (a.average_rating ?? 0)
       );
     }
-
-    mapped = [...sortGroup(favs), ...sortGroup(nonFavs)];
 
     return {
       businesses: mapped,

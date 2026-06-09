@@ -14,9 +14,7 @@ import {
 import { customerDashboardRouter } from "./dashboard/customer-dashboard.routes";
 import { exploreRouter } from "./explore/explore.routes";
 import { businessDetailRouter } from "./business-detail/business-detail.routes";
-import { favouritesRouter } from "./favourites/favourites.routes";
 import { bookingRouter } from "./booking/booking.routes";
-import { customerWalletRouter } from "./wallet/customer-wallet.routes";
 import { reviewRouter } from "../review/review.routes";
 
 export const customerRouter = Router();
@@ -64,8 +62,6 @@ customerRouter.patch(
 );
 
 customerRouter.use("/dashboard",     customerDashboardRouter);
-customerRouter.use("/wallet",        customerWalletRouter);
-customerRouter.use("/favourites",    favouritesRouter);
 customerRouter.use("/booking",       bookingRouter);
 customerRouter.use("/reviews",       reviewRouter);
 

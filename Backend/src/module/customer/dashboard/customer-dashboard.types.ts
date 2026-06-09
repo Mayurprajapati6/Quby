@@ -15,8 +15,10 @@ export interface CustomerDashboardDTO {
     cancelled_bookings: number;
     no_show_bookings:   number;
     total_spent_inr:    number;
-    total_favourites:   number;
     pending_reviews:    number;
+    upcoming_bookings: number;
+refunded_inr: number;
+refunded_bookings: number;
   };
 
   most_booked: {
@@ -24,6 +26,34 @@ export interface CustomerDashboardDTO {
     staff:   MostBookedItem | null;
     service: MostBookedItem | null;
   };
+
+  analytics: {
+  booking_frequency: { month: number; count: number }[];
+  booking_breakdown: {
+    completed: number;
+    cancelled: number;
+    no_show: number;
+    upcoming: number;
+  };
+  service_usage: {
+  name: string;
+  count: number;
+  revenue: number;
+  image: string | null;
+}[];
+
+business_frequency: {
+  name: string;
+  logo: string | null;
+  count: number;
+}[];
+
+staff_frequency: {
+  name: string;
+  avatar: string | null;
+  count: number;
+}[];
+};
 
   monthly_spend: MonthlySpendDTO[];
 
@@ -75,7 +105,6 @@ export interface RecentBookingDTO {
   service_date:   string;
   service_start_time: string;
   status:         string;
-  total_amount:   number;
   has_review:     boolean;
 }
 
@@ -87,8 +116,10 @@ export interface PendingReviewDTO {
   staff_id:       string;
   staff_name:     string;
   service_date:   string;
-}
 
+  // ✅ ADD THIS
+  services: string[];
+}
 export interface CalendarEventDTO {
   booking_id:     string;
   booking_number: string;
@@ -103,3 +134,4 @@ export interface DashboardFilters {
   month?: number;   
   year?:  number;   
 }
+
