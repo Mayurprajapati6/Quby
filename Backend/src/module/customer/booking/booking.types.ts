@@ -36,7 +36,13 @@ export interface StaffSuggestionResponseDTO {
   partial_matches:    PartialMatchStaffDTO[];    
   message:            string;                   
   total_duration_min: number;                   
-  no_staff_reason?:   "holiday" | "all_on_leave" | "no_matching_staff" | "all_fully_booked";
+  no_staff_reason?: 
+  | "holiday"
+  | "all_on_leave"
+  | "no_matching_staff"
+  | "all_fully_booked"
+  | "not_scheduled"
+  | "queue_overflow";
 }
 
 export interface CheckAvailabilityDTO {
@@ -51,11 +57,17 @@ export interface SlotDTO {
   staff_id:             string;
   staff_name:           string;
   avatar_url:           string | null;
-  service_start_time:   string;   
-  arrival_window_start: string;
-  arrival_window_end:   string;
-  estimated_duration:   number;
-  queue_number:         number;
+  service_start_time:   string;
+
+arrival_window_start: string;
+
+arrival_window_end: string;
+
+scan_window_end: string;
+
+estimated_duration: number;
+
+queue_number: number;
 }
 
 export interface CheckAvailabilityResponseDTO {
@@ -73,7 +85,6 @@ export interface CheckAvailabilityResponseDTO {
     experience_years?:    number | null;
     avg_rating?:          number;
     total_reviews?:       number;
-    arrival_window_start?: string;
     estimated_duration?:  number;
     reason:               string;
   };
@@ -92,16 +103,11 @@ export interface CreateBookingResponseDTO {
   booking_number:        string;
   status:                string;
   service_amount:        number;
-  platform_fee:          number;
-  total_amount:          number;
   expires_in:            number;
   is_idempotent:         boolean;
   razorpay_order_id?:    string | null;
   razorpay_key_id?:      string;
   queue_number?:         number;
-  arrival_window_start?: string;
-  arrival_window_end?:   string;
-  service_end_time?:     string;
   estimated_duration?:   number;
 }
 
@@ -116,15 +122,31 @@ export interface BookingListItemDTO {
   booking_number:     string;
   business_name:      string;
   business_logo:      string | null;
-  staff_name:         string;
-  staff_avatar:       string | null;
+
+  staff: {
+    name: string;
+    avatar_url: string | null;
+  };
+
   service_date:       string;
   service_start_time: string;
+
+  arrival_window_start: string;
+  arrival_window_end: string;
+  scan_window_end: string;
+  service_end_time: string;
+
   status:             string;
   service_amount:     number;
-  platform_fee:       number;
-  total_amount:       number;
-  services:           string[];
+
+  services: Array<{
+    service_id: string;
+    name: string;
+    price: number;
+    duration_minutes: number;
+    image_url: string | null;
+  }>;
+
   refund_status:      string | null;
   refund_amount:      number | null;
   cancellable_until:  string | null;
@@ -150,19 +172,33 @@ export interface BookingDetailDTO {
   cancelled_at:         string | null;
 
   service_amount:       number;
-  platform_fee:         number;
-  total_amount:         number;
   cancellable_until:    string | null;
   is_cancellable:       boolean;
 
-  service_date:         string;
-  service_start_time:   string;
-  arrival_window_start: string;
-  arrival_window_end:   string;
-  service_end_time:     string;
-  estimated_duration:   number;
+  service_started_at?: string | null;
+checked_in_at?: string | null;
+has_review?: boolean;
+
+  service_date: string;
+
+service_start_time: string;
+
+arrival_window_start: string;
+
+arrival_window_end: string;
+
+scan_window_end: string;
+
+service_end_time: string;
+
+estimated_duration: number;
   total_duration:       number;
   queue_number:         number;
+
+  actual_start_time?: string | null;
+actual_end_time?: string | null;
+actual_duration?: number | null;
+delay_minutes?: number;
 
   qr_image_url:  string | null;
   qr_expires_at: string | null;
@@ -190,9 +226,10 @@ export interface BookingDetailDTO {
     name:             string;
     price:            number;
     duration_minutes: number;
+    image_url:        string | null;
   }>;
 
-  transaction: {
+  payment: {
     id:                  string;
     status:              string;
     razorpay_payment_id: string | null;

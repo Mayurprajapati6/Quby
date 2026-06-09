@@ -35,7 +35,7 @@ export interface PublicBusinessProfileDTO {
   schedules:       ScheduleDayDTO[];
   todays_schedule: TodayScheduleDTO | null;
 
-  is_favourited:   boolean;
+  
 
   services:        PublicServiceItemDTO[];
   staff:           PublicStaffItemDTO[];
@@ -85,15 +85,23 @@ export interface PublicStaffItemDTO {
 }
 
 export interface StaffReviewItemDTO {
-  id:             string;
-  staff_rating:   number;
-  staff_comment:  string | null;
-  staff_response: string | null;          
-  staff_response_at: string | null;       
-  images:         string[];
-  created_at:     string;
+  id: string;
+  rating: number;
+  comment: string | null;
+  images: string[];
+
+  services: {
+    name: string;
+    image_url: string | null;
+  }[];
+
+  business_response: string | null;
+  business_response_at: string | null;
+
+  created_at: string;
+
   customer: {
-    name:       string;
+    name: string;
     avatar_url: string | null;
   };
 }
@@ -121,25 +129,29 @@ export interface PublicImageItemDTO {
 }
 
 export interface PublicReviewItemDTO {
-  id:                   string;
-  overall_rating:       number;
-  staff_rating:         number;
-  business_rating:      number;
-  staff_comment:        string | null;
-  business_comment:     string | null;
-  images:               string[];        
-  business_response:    string | null;
-  business_response_at: string | null;   
-  staff_response:       string | null;   
-  staff_response_at:    string | null;   
-  created_at:           string;          
+  id: string;
+  rating: number;
+  comment: string | null;
+  images: string[];
+
+  services: {
+    name: string;
+    image_url: string | null;
+  }[]; // 🔥 ADD THIS
+
+  business_response: string | null;
+  business_response_at: string | null;
+
+  created_at: string;
+
   customer: {
-    name:       string;
+    name: string;
     avatar_url: string | null;
   };
+
   staff: {
-    id:         string;
-    name:       string;
+    id: string;
+    name: string;
     avatar_url: string | null;
   };
 }

@@ -24,7 +24,7 @@ export class BusinessDetailRepository {
           where: { is_active: true },
           include: {
             platform_service: {
-              select: { id: true, name: true, service_for: true },
+              select: { id: true, name: true, service_for: true, image_url: true },
             },
           },
           orderBy: { booking_count: "desc" },
@@ -64,20 +64,27 @@ export class BusinessDetailRepository {
     const where: any = {
       business_id: businessId,
       is_visible:  true,
-      ...(opts.rating && { overall_rating: opts.rating }),
+      ...(opts.rating && { rating: opts.rating }),
     };
 
     const [reviews, total] = await Promise.all([
       prisma.review.findMany({
         where,
         include: {
-          customer: {
-            select: { name: true, avatar_url: true },
-          },
-          staff: {
-            select: { id: true, name: true, avatar_url: true },
-          },
-        },
+  customer: {
+    select: { name: true, avatar_url: true },
+  },
+  staff: {
+    select: { id: true, name: true, avatar_url: true },
+  },
+
+  // 🔥 ADD THIS
+  booking: {
+  select: {
+    services: true, // ✅ your schema uses JSON here
+  },
+},
+},
         orderBy: { created_at: "desc" },
         skip:    (opts.page - 1) * opts.limit,
         take:    opts.limit,
@@ -112,17 +119,28 @@ export class BusinessDetailRepository {
     const where: any = {
       staff_id:   staffId,
       is_visible: true,
-      ...(opts.rating && { staff_rating: opts.rating }),
+      ...(opts.rating && { rating: opts.rating }),
     };
 
     const [reviews, total] = await Promise.all([
       prisma.review.findMany({
         where,
         include: {
-          customer: {
-            select: { name: true, avatar_url: true },
-          },
-        },
+  customer: {
+    select: { name: true, avatar_url: true },
+  },
+
+  // 🔥 ADD THIS
+  staff: {
+    select: { id: true, name: true, avatar_url: true },
+  },
+
+  booking: {
+  select: {
+    services: true, // ✅ your schema uses JSON here
+  },
+},
+},
         orderBy: { created_at: "desc" },
         skip:    (opts.page - 1) * opts.limit,
         take:    opts.limit,
@@ -131,16 +149,6 @@ export class BusinessDetailRepository {
     ]);
 
     return { reviews, total };
-  }
-
-  static async isFavourited(
-    customerProfileId: string,
-    businessId:        string
-  ): Promise<boolean> {
-    const count = await prisma.customerFavourite.count({
-      where: { customer_id: customerProfileId, business_id: businessId },
-    });
-    return count > 0;
   }
 
   static async findStaffOnLeaveToday(staffIds: string[]): Promise<Set<string>> {
@@ -165,7 +173,7 @@ export class BusinessDetailRepository {
       where: {
         staff_id:     { in: staffIds },
         service_date: today,
-        status:       { in: ["CHECKED_IN", "IN_PROGRESS"] },
+        status:       { in: ["RUNNING"] },
       },
       select: { staff_id: true },
     });

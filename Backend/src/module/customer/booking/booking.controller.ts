@@ -6,11 +6,20 @@ import type { AuthRequest } from "../../../middlewares/types";
 export class BookingController {
 
   static async suggestStaff(req: AuthRequest, res: Response, next: NextFunction) {
-    try {
-      const data = await BookingService.suggestStaff(req.user!.userId, req.body);
-      res.json(successResponse(data));
-    } catch (err) { next(err); }
+  try {
+    const { business_id, service_offering_ids, service_date } = req.body;
+
+    const data = await BookingService.suggestStaff(
+      business_id,
+      service_offering_ids,
+      new Date(service_date)
+    );
+
+    res.json(successResponse(data));
+  } catch (err) {
+    next(err);
   }
+}
 
   static async checkAvailability(req: AuthRequest, res: Response, next: NextFunction) {
     try {
@@ -55,6 +64,16 @@ export class BookingController {
         req.body,
       );
       res.json(successResponse(data, "Booking cancelled successfully."));
+    } catch (err) { next(err); }
+  }
+
+  static async voidPendingBooking(req: AuthRequest, res: Response, next: NextFunction) {
+    try {
+      const data = await BookingService.voidPendingBooking(
+        req.params.id,
+        req.user!.userId,
+      );
+      res.json(successResponse(data, "Booking voided."));
     } catch (err) { next(err); }
   }
 }

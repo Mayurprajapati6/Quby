@@ -56,7 +56,6 @@ export class BusinessDetailService {
 
     const [
       { reviews, total: reviewTotal },
-      isFavourited,
       leaveStaffIds,
       busyStaffIds,
       holiday,
@@ -66,9 +65,6 @@ export class BusinessDetailService {
         page:   reviewPage,
         limit:  reviewLimit,
       }),
-      customerProfileId
-        ? BusinessDetailRepository.isFavourited(customerProfileId, business.id)
-        : Promise.resolve(false),
       BusinessDetailRepository.findStaffOnLeaveToday(staffIds),
       BusinessDetailRepository.findBusyStaffNow(staffIds),
       BusinessDetailRepository.findHolidayToday(business.id),
@@ -99,37 +95,83 @@ export class BusinessDetailService {
       };
     });
 
-    const reviewItems: PublicReviewItemDTO[] = reviews.map(r => ({
-      id:                   r.id,
-      overall_rating:       r.overall_rating,
-      staff_rating:         r.staff_rating,
-      business_rating:      r.business_rating,
-      staff_comment:        r.staff_comment       ?? null,
-      business_comment:     r.business_comment    ?? null,
-      images:               Array.isArray(r.images) ? (r.images as string[]) : [],
-      business_response:    r.business_response   ?? null,
-      business_response_at: toIST(r.business_response_at as any),
-      staff_response:       (r as any).staff_response    ?? null,
-      staff_response_at:    toIST((r as any).staff_response_at),
-      created_at:           toIST(r.created_at)!,
-      customer: {
-        name:       r.customer.name,
-        avatar_url: r.customer.avatar_url ?? null,
-      },
-      staff: {
-        id:         r.staff.id,
-        name:       r.staff.name,
-        avatar_url: r.staff.avatar_url ?? null,
-      },
-    }));
+   const allServiceIds = new Set<string>();
+
+reviews.forEach((r: any) => {
+  if (Array.isArray(r.booking?.services)) {
+    r.booking.services.forEach((s: any) => {
+      if (s?.service_id) {
+        allServiceIds.add(s.service_id);
+      }
+    });
+  }
+});
+
+// 🔥 FETCH ALL SERVICES FROM DB
+const serviceMap = await prisma.businessServiceOffering.findMany({
+  where: {
+    id: { in: Array.from(allServiceIds) },
+  },
+  include: {
+    platform_service: true,
+  },
+});
+
+// 🔥 CREATE LOOKUP MAP
+const serviceLookup = new Map(
+  serviceMap.map(s => [
+    s.id,
+    {
+      name: s.platform_service.name,
+      image_url: s.platform_service.image_url,
+    },
+  ])
+);
+
+// 🔥 FINAL MAPPING
+const items: PublicReviewItemDTO[] = reviews.map((r: any) => ({
+  id: r.id,
+  rating: r.rating,
+  comment: r.comment ?? null,
+
+  images: Array.isArray(r.images) ? r.images : [],
+
+  services: Array.isArray(r.booking?.services)
+    ? r.booking.services.map((s: any) => {
+        const data = serviceLookup.get(s.service_id);
+        return {
+          name: data?.name ?? "Service",
+          image_url: data?.image_url ?? null,
+        };
+      })
+    : [],
+
+  business_response: r.business_response ?? null,
+  business_response_at: r.business_response_at
+    ? toIST(r.business_response_at)
+    : null,
+
+  created_at: toIST(r.created_at)!,
+
+  customer: {
+    name: r.customer.name,
+    avatar_url: r.customer.avatar_url ?? null,
+  },
+
+  staff: {
+    id: r.staff.id,
+    name: r.staff.name,
+    avatar_url: r.staff.avatar_url ?? null,
+  },
+}));
 
     const ratingCounts = { five: 0, four: 0, three: 0, two: 0, one: 0 };
-    reviews.forEach(r => {
-      if      (r.overall_rating === 5) ratingCounts.five++;
-      else if (r.overall_rating === 4) ratingCounts.four++;
-      else if (r.overall_rating === 3) ratingCounts.three++;
-      else if (r.overall_rating === 2) ratingCounts.two++;
-      else if (r.overall_rating === 1) ratingCounts.one++;
+    reviews.forEach((r: any) => {
+      if      (r.rating === 5) ratingCounts.five++;
+      else if (r.rating === 4) ratingCounts.four++;
+      else if (r.rating === 3) ratingCounts.three++;
+      else if (r.rating === 2) ratingCounts.two++;
+      else if (r.rating === 1) ratingCounts.one++;
     });
 
     const todayDow   = todayDowIST();
@@ -139,6 +181,8 @@ export class BusinessDetailService {
       ?? business.images[0]?.image_url
       ?? business.logo_url
       ?? null;
+
+      
 
     return {
       id:             business.id,
@@ -197,19 +241,20 @@ export class BusinessDetailService {
           }
         : null,
 
-      is_favourited: isFavourited,
+      
 
       services: business.services.map(s => ({
         id:               s.id,
         name:             s.platform_service.name,
         service_for:      s.platform_service.service_for,
+        image_url:        (s.platform_service as any).image_url ?? null,
         price:            s.price,
         discounted_price: s.discounted_price ?? null,
         is_featured:      s.is_featured,
       })),
 
       staff:    staffItems,
-      reviews:  reviewItems,
+      reviews:  items,
 
       review_summary: {
         average_rating:   business.average_rating ?? 0,
@@ -236,19 +281,72 @@ export class BusinessDetailService {
 
     const { reviews, total } = await BusinessDetailRepository.findStaffReviews(staffId, opts);
 
-    const items: StaffReviewItemDTO[] = reviews.map(r => ({
-      id:                r.id,
-      staff_rating:      r.staff_rating,
-      staff_comment:     r.staff_comment      ?? null,
-      staff_response:    (r as any).staff_response    ?? null,
-      staff_response_at: toIST((r as any).staff_response_at),
-      images:            Array.isArray(r.images) ? (r.images as string[]) : [],
-      created_at:        toIST(r.created_at)!,
-      customer: {
-        name:       r.customer.name,
-        avatar_url: r.customer.avatar_url ?? null,
+    const allServiceIds = new Set<string>();
+
+reviews.forEach((r: any) => {
+  if (Array.isArray(r.booking?.services)) {
+    r.booking.services.forEach((s: any) => {
+      if (s?.service_id) {
+        allServiceIds.add(s.service_id);
+      }
+    });
+  }
+});
+
+const serviceMap = await prisma.businessServiceOffering.findMany({
+  where: {
+    id: { in: Array.from(allServiceIds) },
+  },
+  include: {
+    platform_service: {
+      select: {
+        name: true,
+        image_url: true,
       },
-    }));
+    },
+  },
+});
+
+const serviceLookup = new Map<
+  string,
+  { name: string; image_url: string | null }
+>(
+  serviceMap.map((s: any) => [
+    s.id,
+    {
+      name: s.platform_service.name,
+      image_url: s.platform_service.image_url,
+    },
+  ])
+);
+
+const items: StaffReviewItemDTO[] = reviews.map((r: any) => ({
+  id: r.id,
+  rating: r.rating,
+  comment: r.comment ?? null,
+
+  images: Array.isArray(r.images) ? r.images : [],
+
+  services: Array.isArray(r.booking?.services)
+    ? r.booking.services.map((s: any) => {
+        const data = serviceLookup.get(s.service_id);
+        return {
+          name: data?.name ?? "Service",
+          image_url: data?.image_url ?? null,
+        };
+      })
+    : [],
+
+  created_at: toIST(r.created_at)!,
+
+  business_response: r.business_response ?? null,
+  business_response_at: r.business_response_at ? toIST(r.business_response_at) : null,
+
+  customer: {
+    name: r.customer.name,
+    avatar_url: r.customer.avatar_url ?? null,
+  },
+}));
 
     return {
       staff_id:       staff.id,

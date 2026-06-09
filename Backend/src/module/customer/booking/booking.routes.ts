@@ -1,46 +1,49 @@
-import { Router } from "express";
-import { BookingController } from "./booking.controller";
-import { validateRequestBody, validateRequestQuery } from "../../../validators";
+import { Router } from 'express';
+import { BookingController } from './booking.controller';
+import { validateRequestBody, validateRequestQuery } from '../../../validators';
 import {
   suggestStaffSchema,
   checkAvailabilitySchema,
   createBookingSchema,
   cancelBookingSchema,
   myBookingsQuerySchema,
-} from "./booking.validator";
-import { bookingLimiter } from "../../../middlewares/rateLimiter.middleware";
+} from './booking.validator';
+import { bookingLimiter } from '../../../middlewares/rateLimiter.middleware';
+import { reqtrolRateLimiter } from '../../../middlewares/reqtrol.middleware';
 
 export const bookingRouter = Router();
 
 bookingRouter.post(
-  "/suggest-staff",
+  '/suggest-staff',
   validateRequestBody(suggestStaffSchema),
   BookingController.suggestStaff,
 );
 
 bookingRouter.post(
-  "/availability",
+  '/availability',
   validateRequestBody(checkAvailabilitySchema),
   BookingController.checkAvailability,
 );
 
 bookingRouter.post(
-  "/",
-  bookingLimiter,
+  '/',
+  reqtrolRateLimiter('bookingLimiter', bookingLimiter),
   validateRequestBody(createBookingSchema),
   BookingController.createBooking,
 );
 
 bookingRouter.get(
-  "/",
+  '/',
   validateRequestQuery(myBookingsQuerySchema),
   BookingController.getMyBookings,
 );
 
-bookingRouter.get("/:id", BookingController.getBookingDetail);
+bookingRouter.get('/:id', BookingController.getBookingDetail);
+
+bookingRouter.post('/:id/void', BookingController.voidPendingBooking);
 
 bookingRouter.post(
-  "/:id/cancel",
+  '/:id/cancel',
   validateRequestBody(cancelBookingSchema),
   BookingController.cancelBooking,
 );

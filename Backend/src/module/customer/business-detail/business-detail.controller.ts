@@ -139,4 +139,46 @@ export class BusinessDetailController {
       res.json(successResponse(data));
     } catch (err) { next(err); }
   }
+
+  static async getBusinessReviews(req: Request, res: Response, next: NextFunction) {
+    try {
+      const rating = req.query.rating
+        ? parseInt(req.query.rating as string)
+        : undefined;
+
+      const page  = Math.max(1,  parseInt(req.query.page  as string) || 1);
+      const limit = Math.min(50, parseInt(req.query.limit as string) || 20);
+
+      const business = await prisma.business.findUnique({
+        where:  { slug: req.params.slug },
+        select: { id: true },
+      });
+      if (!business) {
+        res.status(404).json({ success: false, message: "Business not found." });
+        return;
+      }
+
+      const { reviews, total } = await (await import("./business-detail.repository")).BusinessDetailRepository.findReviews(
+        business.id,
+        { rating, page, limit }
+      );
+
+      const items = reviews.map((r: any) => ({
+        id:                   r.id,
+        rating:               r.rating,
+        comment:              r.comment ?? null,
+        images:               Array.isArray(r.images) ? r.images : [],
+        business_response:    r.business_response ?? null,
+        business_response_at: r.business_response_at ?? null,
+        created_at:           r.created_at,
+        customer: { name: r.customer.name, avatar_url: r.customer.avatar_url ?? null },
+        staff:    { id: r.staff?.id ?? "", name: r.staff?.name ?? "", avatar_url: r.staff?.avatar_url ?? null },
+      }));
+
+      res.json(successResponse({
+        reviews: items,
+        pagination: { total, page, limit, total_pages: Math.ceil(total / limit) },
+      }));
+    } catch (err) { next(err); }
+  }
 }
