@@ -2,6 +2,7 @@ import { StaffLeaveRepository }  from "./staff-leave.repository";
 import { prisma } from "../../../config/prisma";
 import { emitToUser } from "../../../socket/socket.service";
 import { queueEmail } from "../../../services/email.services";
+import { formatInTimeZone } from "date-fns-tz";
 import {
   NotFoundError,
   BadRequestError,
@@ -29,8 +30,9 @@ export class StaffLeaveService {
   static async requestLeave(userId: string, dto: RequestLeaveDTO): Promise<StaffLeaveItemDTO> {
     const staff = await this.resolveStaff(userId);
 
-    const startDate = new Date(dto.start_date);
-    const endDate   = new Date(dto.end_date);
+    // Parse YYYY-MM-DD as UTC midnight — matches @db.Date storage format
+    const startDate = new Date(dto.start_date + "T00:00:00.000Z");
+    const endDate   = new Date(dto.end_date   + "T00:00:00.000Z");
 
     if (isNaN(startDate.getTime()) || isNaN(endDate.getTime())) {
       throw new BadRequestError("Invalid date format. Use YYYY-MM-DD.");
@@ -38,7 +40,10 @@ export class StaffLeaveService {
     if (endDate < startDate) {
       throw new BadRequestError("end_date must be on or after start_date.");
     }
-    if (startDate <= new Date()) {
+    // Compare against today's date in IST so staff can't request today in IST
+    const todayISTStr = formatInTimeZone(new Date(), "Asia/Kolkata", "yyyy-MM-dd");
+    const todayUTC    = new Date(todayISTStr + "T00:00:00.000Z");
+    if (startDate <= todayUTC) {
       throw new BadRequestError("Leave dates must be in the future.");
     }
 

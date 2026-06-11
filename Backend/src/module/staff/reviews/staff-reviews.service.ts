@@ -1,11 +1,12 @@
 import { prisma } from "../../../config/prisma";
 import { StaffReviewsRepository } from "./staff-reviews.repository";
-import { NotFoundError, ForbiddenError, ConflictError } from "../../../utils/errors/app.error";
+import { NotFoundError, ForbiddenError } from "../../../utils/errors/app.error";
 import { formatInTimeZone } from "date-fns-tz";
+import type { StaffReviewItemDTO } from "../../review/review.types";
 
-const IST = "Asia/Kolkata";
-function toIST(d: Date)     { return formatInTimeZone(d, IST, "yyyy-MM-dd'T'HH:mm:ssxxx"); }
-function toISTDate(d: Date) { return formatInTimeZone(d, IST, "yyyy-MM-dd"); }
+const TZ = "Asia/Kolkata";
+function toTZ(d: Date)     { return formatInTimeZone(d, TZ, "yyyy-MM-dd'T'HH:mm:ssxxx"); }
+function toTZDate(d: Date) { return formatInTimeZone(d, TZ, "yyyy-MM-dd"); }
 
 async function resolveStaff(userId: string) {
   const s = await prisma.staff.findUnique({
@@ -17,19 +18,15 @@ async function resolveStaff(userId: string) {
   return s;
 }
 
-function toReviewDTO(r: any) {
+function toDTO(r: any): StaffReviewItemDTO {
   return {
-    id:                   r.id,
-    staff_rating:         r.staff_rating,
-    business_rating:      r.business_rating,
-    overall_rating:       r.overall_rating,
-    staff_comment:        r.staff_comment       ?? null,
-    images:               Array.isArray(r.images) ? r.images : [],
-    staff_response:       r.staff_response       ?? null,
-    staff_response_at:    r.staff_response_at    ? toIST(r.staff_response_at) : null,
+    id:      r.id,
+    rating:  r.rating,
+    comment: r.comment ?? null,
+    images:  Array.isArray(r.images) ? r.images : [],
     business_response:    r.business_response    ?? null,
-    business_response_at: r.business_response_at ? toIST(r.business_response_at) : null,
-    created_at: toIST(r.created_at),
+    business_response_at: r.business_response_at ? toTZ(r.business_response_at) : null,
+    created_at: toTZ(r.created_at),
     customer: {
       id:         r.customer.id,
       name:       r.customer.name,
@@ -38,15 +35,20 @@ function toReviewDTO(r: any) {
     booking: {
       id:             r.booking.id,
       booking_number: r.booking.booking_number,
-      service_date:   toISTDate(r.booking.service_date),
-      services:       Array.isArray(r.booking.services)
-        ? r.booking.services.map((s: any) => s.name ?? "") : [],
+      service_date:   toTZDate(r.booking.service_date),
+      services: Array.isArray(r.booking.services)
+  ? r.booking.services.map((s: any) => ({
+      name: typeof s === "string" ? s : s?.name ?? "",
+      image: s?.image ?? s?.image_url ?? null,
+    }))
+  : [],
     },
   };
 }
 
 export class StaffReviewsService {
 
+  // All reviews for this staff member
   static async getReviews(userId: string, opts: { rating?: number; page: number; limit: number }) {
     const staff = await resolveStaff(userId);
     const { reviews, total } = await StaffReviewsRepository.find(staff.id, {
@@ -55,19 +57,12 @@ export class StaffReviewsService {
       take:   opts.limit,
     });
 
+    const summary = await StaffReviewsRepository.getSummary(staff.id);
+
     return {
-      reviews: reviews.map(toReviewDTO),
+      summary,
+      reviews: reviews.map(toDTO),
       pagination: { total, page: opts.page, limit: opts.limit, total_pages: Math.ceil(total / opts.limit) },
     };
-  }
-
-  static async respondToReview(userId: string, reviewId: string, response: string) {
-    const staff  = await resolveStaff(userId);
-    const review = await StaffReviewsRepository.findById(reviewId, staff.id);
-    if (!review) throw new NotFoundError("Review not found.");
-    if (review.staff_response) throw new ConflictError("You have already responded to this review.");
-
-    await StaffReviewsRepository.addResponse(reviewId, response);
-    return { message: "Response published." };
   }
 }

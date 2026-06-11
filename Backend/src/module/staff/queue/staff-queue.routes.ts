@@ -33,11 +33,11 @@ staffQueueRouter.post(
   StaffQueueController.extendService,
 );
 
-staffQueueRouter.post(
-  "/delay",
-  validateRequestBody(reportDelaySchema),
-  StaffQueueController.reportDelay,
-);
+// staffQueueRouter.post(
+//   "/delay",
+//   validateRequestBody(reportDelaySchema),
+//   StaffQueueController.reportDelay,
+// );
 
 staffQueueRouter.post(
   "/rebuild",

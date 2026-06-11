@@ -1,14 +1,7 @@
 import { Router } from "express";
 import { StaffReviewsController } from "./staff-reviews.controller";
-import { validateRequestBody } from "../../../validators";
-import { respondToReviewSchema } from "../../../validators/review.validator";
 
 export const staffReviewsRouter = Router();
 
+// GET /staff/reviews — reviews where this staff member served
 staffReviewsRouter.get("/", StaffReviewsController.getReviews);
-
-staffReviewsRouter.post(
-  "/:reviewId/respond",
-  validateRequestBody(respondToReviewSchema),
-  StaffReviewsController.respondToReview,
-);

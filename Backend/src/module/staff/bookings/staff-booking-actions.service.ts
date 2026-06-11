@@ -1,20 +1,48 @@
-import { prisma } from "../../../config/prisma";
-import { escrowQueue, notificationQueue, analyticsQueue } from "../../../config/bullmq";
+import { prisma }        from "../../../config/prisma";
+import { settleQueue, notificationQueue, analyticsQueue } from "../../../config/bullmq";
 import { emitToUser, emitToBusiness } from "../../../socket/socket.service";
-import { BusinessAttendanceService } from "../../business/attendance/business-attendance.service";
-import { add, addMinutes, differenceInMinutes } from "date-fns";
+import { addMinutes, differenceInMinutes } from "date-fns";
 import { formatInTimeZone } from "date-fns-tz";
-import {
-  NotFoundError,
-  BadRequestError,
-  ForbiddenError,
-} from "../../../utils/errors/app.error";
+import { NotFoundError, BadRequestError, ForbiddenError } from "../../../utils/errors/app.error";
 import logger from "../../../config/logger.config";
+import { verifyQrSignature } from "../../payment/payment.service";
+import { invalidateSlotCache } from "../../../utils/cache/slotCache";
+import {
+  bookingWindowStart,
+  deriveArrivalWindowStart,
+  deriveScanWindowEnd,
+} from "../../../utils/helpers/timeWindows";
 
-const IST = "Asia/Kolkata";
+const TZ        = "Asia/Kolkata";
+const toTZ      = (d: Date) => formatInTimeZone(d, TZ, "yyyy-MM-dd'T'HH:mm:ssxxx");
+const toIST     = (d: Date) => formatInTimeZone(d, TZ, "yyyy-MM-dd HH:mm:ss");
+const toISTTime = (d: Date) => formatInTimeZone(d, TZ, "hh:mm a");
 
-function toIST(d: Date): string {
-  return formatInTimeZone(d, IST, "yyyy-MM-dd'T'HH:mm:ssxxx");
+const ALLOWED_TRANSITIONS: Record<string, string[]> = {
+  CONFIRMED: ["RUNNING"],
+  RUNNING:   ["COMPLETED"],
+};
+
+function normalizeQrId(raw: string): string {
+  const value = raw.trim();
+  if (!value) return value;
+
+  try {
+    const parsed = JSON.parse(value);
+    return String(parsed.qr_id ?? parsed.qrId ?? parsed.qr_code_id ?? parsed.qrCodeId ?? value).trim();
+  } catch {}
+
+  try {
+    const url = new URL(value);
+    return (
+      url.searchParams.get("qr_id") ??
+      url.searchParams.get("qrId") ??
+      url.searchParams.get("qr_code_id") ??
+      value
+    ).trim();
+  } catch {}
+
+  return value;
 }
 
 async function resolveStaff(userId: string) {
@@ -29,168 +57,244 @@ async function resolveStaff(userId: string) {
 export class StaffBookingActionsService {
 
   static async scanBooking(
-    userId:    string,
-    bookingId: string,
-    qrId:      string,
+    userId:     string,
+    bookingId:  string,
+    rawQrId:    string,
     scanMethod: "CAMERA" | "MANUAL" = "CAMERA",
   ) {
     const staff = await resolveStaff(userId);
     const now   = new Date();
+    const qrId  = normalizeQrId(rawQrId);
 
     const booking = await prisma.booking.findUnique({
-      where:   { id: bookingId },
+      where: { id: bookingId },
       include: {
         qr_code:  true,
         customer: { select: { id: true, name: true, user: { select: { id: true, email: true } } } },
-        business: { select: { id: true, business_name: true, auth_user_id: true } },
+        business: { select: { id: true, business_name: true } },
       },
     });
 
-    if (!booking)              throw new NotFoundError("Booking not found.");
+    if (!booking)                      throw new NotFoundError("Booking not found.");
     if (booking.staff_id !== staff.id) throw new ForbiddenError("This booking is not assigned to you.");
-    if (!booking.qr_code)      throw new BadRequestError("No QR code found for this booking.");
+    if (!booking.qr_code)              throw new BadRequestError("No QR code found for this booking.");
 
     const qr = booking.qr_code;
 
+    if (qr.booking_id !== bookingId) {
+      await prisma.qrScanLog.create({
+        data: { booking_id: bookingId, qr_code_id: qr.id, staff_id: staff.id, scan_result: "INVALID_QR_ID", scan_method: scanMethod },
+      }).catch(() => {});
+      throw new BadRequestError("This QR does not belong to this booking.");
+    }
+
     if (qr.qr_code_id !== qrId) {
-      await prisma.qrScanLog.create({
-        data: {
-          booking_id:  bookingId,
-          qr_code_id:  qr.id,
-          staff_id:    staff.id,
-          scan_result: "INVALID_QR_ID",
-          scan_method: scanMethod,
-        },
-      }).catch(() => {});
-      throw new BadRequestError("QR ID does not match this booking.");
-    }
-
-    const scanAbsoluteStart = booking.scan_absolute_start
-      ?? addMinutes(booking.arrival_window_start, -5);
-    const scanAbsoluteEnd   = booking.scan_absolute_end
-      ?? addMinutes(booking.arrival_window_start, 15);
-
-    if (now < scanAbsoluteStart) {
-      await prisma.qrScanLog.create({
-        data: {
-          booking_id:  bookingId,
-          qr_code_id:  qr.id,
-          staff_id:    staff.id,
-          scan_result: "TOO_EARLY",
-          scan_method: scanMethod,
-        },
-      }).catch(() => {});
-      throw new BadRequestError(
-        `Too early to scan. Check-in opens at ${toIST(scanAbsoluteStart)}.`
-      );
-    }
-
-    if (now > scanAbsoluteEnd || qr.qr_status === "CANCELLED") {
-      await prisma.$transaction(async (tx) => {
-        
-        if (booking.status === "CONFIRMED") {
-          await tx.booking.update({
-            where: { id: bookingId },
-            data:  { status: "CANCELLED_NO_SHOW", cancelled_at: now },
-          });
-        }
-        await tx.qRCode.update({
-          where: { id: qr.id },
-          data:  { qr_status: "EXPIRED", is_used: true, used_at: now },
-        });
-        await tx.qrScanLog.create({
-          data: {
-            booking_id:  bookingId,
-            qr_code_id:  qr.id,
-            staff_id:    staff.id,
-            scan_result: "EXPIRED",
-            scan_method: scanMethod,
-          },
-        });
+      const scannedQr = await prisma.qRCode.findUnique({
+        where: { qr_code_id: qrId },
+        select: { id: true, booking_id: true },
       });
-      throw new BadRequestError("QR scan window has expired. Booking marked as no-show.");
+      await prisma.qrScanLog.create({
+        data: { booking_id: bookingId, qr_code_id: scannedQr?.id ?? qr.id, staff_id: staff.id, scan_result: "INVALID_QR_ID", scan_method: scanMethod },
+      }).catch(() => {});
+      if (scannedQr?.booking_id && scannedQr.booking_id !== bookingId) {
+        throw new BadRequestError("This QR belongs to a different booking.");
+      }
+      throw new BadRequestError("No active QR code matches this booking. Ask the customer to show the latest booking QR.");
+    }
+
+    const active = await prisma.booking.findFirst({
+      where: {
+        staff_id:     staff.id,
+        service_date: booking.service_date,
+        status:       "RUNNING",
+        is_visible:   { not: false },
+      },
+    });
+    if (active && active.id !== bookingId) {
+      throw new BadRequestError("Another service is already in progress. Complete it before scanning a new one.");
+    }
+
+    if (!verifyQrSignature(qr.qr_data)) {
+      await prisma.qrScanLog.create({
+        data: { booking_id: bookingId, qr_code_id: qr.id, staff_id: staff.id, scan_result: "INVALID_SIGNATURE", scan_method: scanMethod },
+      }).catch(() => {});
+      throw new BadRequestError("QR code signature is invalid. Ask the customer to refresh their QR.");
     }
 
     if (qr.qr_status === "USED" || qr.is_used) {
       await prisma.qrScanLog.create({
-        data: {
-          booking_id:  bookingId,
-          qr_code_id:  qr.id,
-          staff_id:    staff.id,
-          scan_result: "ALREADY_USED",
-          scan_method: scanMethod,
-        },
+        data: { booking_id: bookingId, qr_code_id: qr.id, staff_id: staff.id, scan_result: "ALREADY_USED", scan_method: scanMethod },
       }).catch(() => {});
-      throw new BadRequestError("This QR code has already been scanned.");
+      throw new BadRequestError("This QR code has already been scanned for this booking.");
     }
 
-    if (!["CONFIRMED", "CHECKED_IN"].includes(booking.status)) {
-      throw new BadRequestError(`Cannot scan: booking status is ${booking.status}.`);
+    // ── Scan window check ──────────────────────────────────────────
+    const serviceStart    = bookingWindowStart(new Date(booking.service_start_time));
+    const scanWindowStart = deriveArrivalWindowStart(booking.service_start_time);
+    const scanWindowEnd   = deriveScanWindowEnd(booking.service_start_time);
+
+    // Too early
+    if (now < scanWindowStart) {
+      throw new BadRequestError(
+        `Scan window not open yet. Opens at ${toISTTime(scanWindowStart)} (15 min before appointment).`
+      );
     }
 
-    await prisma.$transaction(async (tx) => {
-      await tx.booking.update({
-        where: { id: bookingId },
-        data:  {
-          status:              "RUNNING",
-          service_start_actual: now,
-          service_started_at:  now,   
-          checked_in_at:       now,
-        },
+    // Too late → NO_SHOW
+    if (now >= scanWindowEnd) {
+      await prisma.$transaction(async (tx) => {
+        if (booking.status === "CONFIRMED" || booking.status === "RUNNING") {
+          await tx.booking.update({
+            where: { id: bookingId },
+            data:  { status: "NO_SHOW", cancelled_at: now },
+          });
+          // FIX: jobId uses dashes — "settle-${id}" not "settle:${id}"
+          await settleQueue.add(`settle-noshow-${bookingId}`, { bookingId }, { jobId: `settle-noshow-${bookingId}` }).catch(() => {});
+        }
+        await tx.qRCode.update({ where: { id: qr.id }, data: { qr_status: "EXPIRED" } });
       });
 
+      const { QueueRecalculationService } = await import("../queue/queue-recalculation.service");
+      await QueueRecalculationService.rebuildQueue(booking.staff_id, booking.service_date);
+
+      // FIX: jobId "booking-no-show-${id}" — no colons
+      await notificationQueue.add(
+        `booking-no-show-${bookingId}`,
+        { bookingId, type: "booking:no_show" },
+        { jobId: `booking-no-show-${bookingId}` },
+      ).catch(() => {});
+
+      emitToBusiness(booking.business_id, "booking:no_show", {
+        bookingId,
+        noShowAt: now.toISOString(),
+      });
+
+      throw new BadRequestError(
+        `Scan window closed at ${toISTTime(scanWindowEnd)}. This booking has been marked as No Show.`
+      );
+    }
+
+    // ── Guard: already started / no-show ──────────────────────────
+    if (booking.status === "RUNNING" && booking.service_started_at) {
+      throw new BadRequestError("This service has already been started.");
+    }
+    if (booking.status === "NO_SHOW") {
+      throw new BadRequestError("This booking was already marked as No Show.");
+    }
+    if (booking.status === "COMPLETED") {
+      throw new BadRequestError("This booking is already completed.");
+    }
+    if (booking.status !== "CONFIRMED" && booking.status !== "RUNNING") {
+      throw new BadRequestError(`Cannot start service. Booking status is: ${booking.status}.`);
+    }
+
+    // ── Start service (atomic) ─────────────────────────────────────
+    await prisma.$transaction(async (tx) => {
       await tx.qRCode.update({
         where: { id: qr.id },
+        data:  { qr_status: "USED", is_used: true, used_at: now },
+      });
+
+      const updated = await tx.booking.updateMany({
+        where: { id: bookingId, status: { in: ["CONFIRMED", "RUNNING"] } },
         data:  {
-          qr_status:     "USED",
-          is_used:       true,
-          used_at:       now,
-          used_by_staff: staff.id,
+          status:             "RUNNING",
+          service_started_at: now,
+          checked_in_at:      now,
         },
       });
+      if (updated.count === 0) throw new BadRequestError("Booking could not be started. Please try again.");
 
       await tx.qrScanLog.create({
-        data: {
-          booking_id:  bookingId,
-          qr_code_id:  qr.id,
-          staff_id:    staff.id,
-          scan_result: "VALID",
-          scan_method: scanMethod,
-        },
+        data: { booking_id: bookingId, qr_code_id: qr.id, staff_id: staff.id, scan_result: "VALID", scan_method: scanMethod },
       });
     });
 
-    BusinessAttendanceService.markPresentFromBooking({
-      staff_id:    staff.id,
-      business_id: staff.business_id,
-      date:        booking.service_date,
-      booking_id:  bookingId,
-    }).catch(err => logger.warn("[StaffBookingActions] Attendance failed:", err));
+    // ── Late scan detection ────────────────────────────────────────
+    const isLate       = now > serviceStart;
+    const delayMinutes = isLate ? differenceInMinutes(now, serviceStart) : 0;
 
-    const customerUserId = booking.customer.user.id;
-    emitToUser(customerUserId, "service:checked_in", { bookingId });
-    emitToBusiness(booking.business_id, "service:checked_in", {
+    logger.info(`[SCAN] ${bookingId}: scheduled=${toIST(serviceStart)}, scanned=${toIST(now)}, late=${isLate}, delayMin=${delayMinutes}`);
+
+    if (isLate) {
+      const { QueueRecalculationService } = await import("../queue/queue-recalculation.service");
+
+      const actualEnd = addMinutes(now, booking.estimated_duration);
+
+      console.log("\n========== LATE SCAN DEBUG ==========");
+      console.log("bookingId:", booking.id);
+      console.log("scheduledStart:", serviceStart.toISOString());
+      console.log("actualStart:", now.toISOString());
+      console.log("estimatedDuration:", booking.estimated_duration);
+      console.log("calculatedActualEnd:", actualEnd.toISOString());
+      console.log("trigger:", "LATE_SCAN");
+      console.log("=====================================\n");
+
+      logger.info(
+        `[LATE_SCAN] booking=${booking.id} actualStart=${now.toISOString()} actualEnd=${actualEnd.toISOString()}`
+      );
+
+      await QueueRecalculationService.smartRebuildFromBooking(
+        booking.id,
+        booking.staff_id,
+        booking.service_date,
+        actualEnd,
+      ).catch(err => {
+        console.error("[LATE_SCAN] smartRebuildFromBooking FAILED", err);
+        logger.error("[LATE_SCAN] smartRebuildFromBooking FAILED:", err?.message);
+      });
+
+      const newArrivalStart = addMinutes(now, -15);
+      const newScanEnd      = addMinutes(now, 10);
+
+      emitToUser(booking.customer.user.id, "booking:time_updated", {
+        bookingId,
+        newServiceStartTime: toTZ(now),
+        newArrivalStart:     toTZ(newArrivalStart),
+        newArrivalEnd:       toTZ(now),
+        newScanWindowEnd:    toTZ(newScanEnd),
+        message:             `Service started at ${toISTTime(now)} (${delayMinutes}min late).`,
+      });
+
+      emitToBusiness(staff.business_id, "booking:time_updated", {
+        bookingId,
+        newServiceStartTime: toTZ(now),
+        newArrivalStart:     toTZ(newArrivalStart),
+        newArrivalEnd:       toTZ(now),
+        newScanWindowEnd:    toTZ(newScanEnd),
+      });
+    }
+
+    // ── Notify customer that service is RUNNING ────────────────────
+    emitToUser(booking.customer.user.id, "booking:updated", {
       bookingId,
-      staffId:      staff.id,
-      customerName: booking.customer.name,
+      status:             "RUNNING",
+      service_started_at: now.toISOString(),
     });
 
-    await prisma.staffNotification.create({
-      data: {
-        staff_id:   staff.id,
-        type:       "CUSTOMER_CHECKED_IN",
-        title:      "Customer Arrived",
-        message:    `${booking.customer.name} checked in for booking #${booking.booking_number}. Service timer started.`,
-        expires_at: add(new Date(), { hours: 24 }), 
-      },
-    }).catch(() => {});
+    emitToBusiness(staff.business_id, "queue:updated", { staffId: staff.id });
 
-    logger.info(`[StaffBookingActions] Scan accepted — booking ${bookingId} → RUNNING`);
+    // FIX: jobId "service-started-${id}" — no colons
+    await notificationQueue.add(
+      `service-started-${bookingId}`,
+      { bookingId, type: "service:started" },
+      { jobId: `service-started-${bookingId}` },
+    ).catch(() => {});
+
+    await invalidateSlotCache(staff.id, booking.service_date.toISOString().slice(0, 10)).catch(() => {});
+
+    logger.info(`[SCAN] ${bookingId} → RUNNING (late=${isLate}, delay=${delayMinutes}min, method=${scanMethod})`);
 
     return {
-      booking_id: bookingId,
-      status:     "IN_PROGRESS",
-      message:    "Booking scanned. Service started.",
+      bookingId,
+      status:       "RUNNING",
+      startedAt:    now.toISOString(),
+      customerName: booking.customer.name,
+      isLate,
+      delayMinutes,
+      services: Array.isArray(booking.services)
+        ? booking.services.map((s: any) => s.name ?? "")
+        : [],
     };
   }
 
@@ -202,89 +306,96 @@ export class StaffBookingActionsService {
       where:   { id: bookingId },
       include: {
         customer: { select: { id: true, name: true, user: { select: { id: true, email: true } } } },
-        business: { select: { id: true, business_name: true, auth_user_id: true } },
-        escrow:   { select: { id: true, status: true } },
+        business: { select: { id: true, business_name: true } },
+        payment:  { select: { id: true, status: true } },
       },
     });
 
-    if (!booking)              throw new NotFoundError("Booking not found.");
+    if (!booking)                      throw new NotFoundError("Booking not found.");
     if (booking.staff_id !== staff.id) throw new ForbiddenError("This booking is not assigned to you.");
 
-    const serviceStartActual = booking.service_start_actual ?? booking.service_started_at;
-    if (!serviceStartActual) {
-      throw new BadRequestError(
-        "Service has not started yet. Scan the QR code first."
-      );
+    if (!booking.service_started_at) {
+      throw new BadRequestError("Service has not been started yet. Scan the customer's QR code first.");
     }
 
-    if (!["RUNNING", "CHECKED_IN", "IN_PROGRESS"].includes(booking.status)) {
-      throw new BadRequestError(`Cannot complete: booking status is ${booking.status}.`);
+    if (booking.status === "COMPLETED") {
+      return { booking_id: bookingId, status: "COMPLETED", message: "Booking is already completed." };
     }
 
-    const staffTakenTime = differenceInMinutes(now, serviceStartActual);
+    if (!ALLOWED_TRANSITIONS[booking.status]?.includes("COMPLETED")) {
+      throw new BadRequestError(`Cannot complete booking with status: ${booking.status}.`);
+    }
 
-    await prisma.$transaction(async (tx) => {
-      await tx.booking.update({
-        where: { id: bookingId },
-        data:  {
-          status:               "COMPLETED",
-          service_end_actual:   now,
-          service_completed_at: now,    
-          staff_taken_time:     staffTakenTime,
-          actual_duration:      staffTakenTime,
-        },
-      });
+    const staffTakenTime = differenceInMinutes(now, booking.service_started_at);
+
+    await prisma.booking.update({
+      where: { id: bookingId },
+      data:  {
+        status:               "COMPLETED",
+        service_completed_at: now,
+        staff_taken_time:     staffTakenTime,
+        actual_duration:      staffTakenTime,
+      },
     });
 
-    if (booking.escrow && booking.escrow.status === "HELD") {
-      escrowQueue.add(
-        `release-escrow:${bookingId}`,
+    logger.info(`[Complete] ${bookingId} → COMPLETED in ${staffTakenTime}min`);
+
+    const { QueueRecalculationService } = await import("../queue/queue-recalculation.service");
+
+    const scheduledEnd  = addMinutes(new Date(booking.service_start_time), booking.estimated_duration);
+    const isEarlyFinish = now < scheduledEnd;
+
+    if (isEarlyFinish) {
+      await QueueRecalculationService.handleEarlyFinish(staff.id, booking.service_date).catch(() => {});
+    } else {
+      await QueueRecalculationService.rebuildQueue(staff.id, booking.service_date).catch(() => {});
+      await QueueRecalculationService.autoMoveNextToRunning(staff.id, booking.service_date, true).catch(() => {});
+    }
+    const ts = Date.now();
+    if (booking.payment?.status === "PAID") {
+      logger.info(`[COMPLETE] enqueue settlement for ${bookingId}`);
+      
+      // FIX: jobId "settle-complete-${id}-${ts}" — no colons
+      settleQueue.add(
+        `settle-complete-${bookingId}-${ts}`,
         { bookingId },
-        { delay: 0, jobId: `release-escrow:${bookingId}` }
-      ).catch(err => logger.warn("[StaffBookingActions] Escrow queue failed:", err));
+        {
+          delay:            0,
+          jobId:            `settle-complete-${bookingId}-${ts}`,
+          attempts:         5,
+          removeOnComplete: true,
+          removeOnFail:     1000,
+        },
+      ).catch(() => {});
     }
 
-    notificationQueue.add(
-      `booking-completed:${bookingId}`,
-      { bookingId, type: "booking-completed" } as any,
-      { jobId: `booking-completed:${bookingId}` }
-    ).catch(() => {});
+    // FIX: jobId "booking-completed-${id}-${ts}" — no colons
+    await notificationQueue.add(
+      `booking-completed-${bookingId}`,
+      { bookingId, type: "booking:completed" },
+      { jobId: `booking-completed-${bookingId}-${ts}` },
+    ).catch(err => logger.error(`[Complete] notif enqueue FAILED for ${bookingId}:`, err?.message));
 
+    // FIX: jobId "analytics-booking-completed-${id}-${ts}" — no colons
     analyticsQueue.add(
-      `booking-completed:${bookingId}`,
-      {
-        type:       "booking-completed",
-        bookingId,
-        staffId:    staff.id,
-        businessId: booking.business_id,
-      },
-      { jobId: `analytics:booking-completed:${bookingId}` },
+      `analytics-booking-completed-${bookingId}`,
+      { type: "booking:completed", bookingId, staffId: staff.id, businessId: booking.business_id },
+      { jobId: `analytics-booking-completed-${bookingId}-${ts}` },
     ).catch(() => {});
 
-    const customerUserId = booking.customer.user.id;
-    emitToUser(customerUserId, "service:completed", { bookingId });
-    emitToBusiness(booking.business_id, "service:completed", { bookingId, staffId: staff.id });
+    emitToUser(booking.customer.user.id, "booking:updated", { bookingId, status: "COMPLETED" });
+    emitToBusiness(booking.business_id, "queue:updated", { staffId: staff.id });
 
-    StaffBookingActionsService.updatePerformance(
-      staff.id,
-      booking.estimated_duration,
-      staffTakenTime,
-    ).catch(() => {});
+    logger.info(`[StaffBookingActions] ${bookingId} COMPLETED — taken=${staffTakenTime}min, early=${isEarlyFinish}`);
 
-    logger.info(
-      `[StaffBookingActions] Completed booking ${bookingId} — staffTakenTime: ${staffTakenTime} min`
-    );
-
-    return {
-      booking_id: bookingId,
-      status:     "COMPLETED",
-      message:    "Booking completed.",
-    };
+    return { bookingId, status: "COMPLETED", message: "Booking completed successfully." };
   }
 
+  // ─────────────────────────────────────────────────────────────────
+  // getPerformanceSummary — unchanged
+  // ─────────────────────────────────────────────────────────────────
   static async getPerformanceSummary(userId: string, period: "week" | "month" | "year") {
     const staff = await resolveStaff(userId);
-
     const since = period === "week"
       ? new Date(Date.now() - 7 * 24 * 60 * 60 * 1000)
       : period === "month"
@@ -293,101 +404,28 @@ export class StaffBookingActionsService {
 
     const result = await prisma.booking.aggregate({
       where: {
-        staff_id:     staff.id,
-        status:       "COMPLETED",
-        service_date: { gte: since },
-        staff_taken_time:    { not: null },
+        staff_id:         staff.id,
+        status:           "COMPLETED",
+        service_date:     { gte: since },
+        staff_taken_time: { not: null },
       },
-      _avg: {
-        estimated_duration: true,
-        staff_taken_time:   true,
-        actual_duration:    true,
-      },
+      _avg:   { estimated_duration: true, staff_taken_time: true },
       _count: { id: true },
-      _sum:   { staff_taken_time: true },
+      _sum:   { staff_taken_time: true, estimated_duration: true },
     });
 
     const avgExpected = result._avg.estimated_duration ?? 0;
     const avgActual   = result._avg.staff_taken_time   ?? 0;
+    const sumActual   = result._sum.staff_taken_time   ?? 0;
+    const sumEstimate = result._sum.estimated_duration ?? 0;
 
-    const extraResult = await prisma.booking.aggregate({
-      where: {
-        staff_id:     staff.id,
-        status:       "COMPLETED",
-        service_date: { gte: since },
-        staff_taken_time: { not: null },
-      },
-      _sum: { staff_taken_time: true, estimated_duration: true },
-    });
-    const sumActual    = extraResult._sum.staff_taken_time   ?? 0;
-    const sumEstimated = extraResult._sum.estimated_duration ?? 0;
     return {
-      total_bookings:                result._count.id,
-      completed:                     result._count.id,
-      accuracy_percent:              avgExpected > 0 ? Math.min(100, Math.round((avgExpected / (avgActual || 1)) * 100)) : 100,
-      avg_estimated_minutes:         Math.round(avgExpected),
-      avg_actual_minutes:            Math.round(avgActual),
-      extra_time_taken_total_minutes: Math.max(0, sumActual - sumEstimated),
+      total_bookings:                 result._count.id,
+      completed:                      result._count.id,
+      accuracy_percent:               avgExpected > 0 ? Math.min(100, Math.round((avgExpected / (avgActual || 1)) * 100)) : 100,
+      avg_estimated_minutes:          Math.round(avgExpected),
+      avg_actual_minutes:             Math.round(avgActual),
+      extra_time_taken_total_minutes: Math.max(0, sumActual - sumEstimate),
     };
-  }
-
-  private static async updatePerformance(
-    staffId:  string,
-    estimated: number,
-    actual:    number,
-  ): Promise<void> {
-    const monthStart = new Date(new Date().getFullYear(), new Date().getMonth(), 1);
-    const isOnTime   = actual <= estimated + 5;
-    const delayAmt   = Math.max(0, actual - estimated);
-    const efficiency = estimated > 0
-      ? Math.min(100, Math.round((estimated / actual) * 100))
-      : 100;
-
-    await prisma.$transaction(async (tx) => {
-      const existing = await tx.staffPerformance.findUnique({
-        where: { staff_id_month: { staff_id: staffId, month: monthStart } },
-      });
-
-      if (existing) {
-        const newTotal    = existing.total_bookings + 1;
-        const newEstMins  = existing.total_estimated_minutes + estimated;
-        const newActMins  = existing.total_actual_minutes    + actual;
-        const newOnTime   = existing.on_time_count  + (isOnTime ? 1 : 0);
-        const newDelayed  = existing.delayed_count  + (isOnTime ? 0 : 1);
-        const newAvgDelay = newDelayed > 0
-          ? Math.round((existing.avg_delay_minutes * existing.delayed_count + delayAmt) / newDelayed)
-          : 0;
-        const newAvgEff   = Math.round(
-          (existing.average_efficiency * existing.total_bookings + efficiency) / newTotal
-        );
-
-        await tx.staffPerformance.update({
-          where: { id: existing.id },
-          data: {
-            total_bookings:           newTotal,
-            total_estimated_minutes:  newEstMins,
-            total_actual_minutes:     newActMins,
-            average_efficiency:       newAvgEff,
-            on_time_count:            newOnTime,
-            delayed_count:            newDelayed,
-            avg_delay_minutes:        newAvgDelay,
-          },
-        });
-      } else {
-        await tx.staffPerformance.create({
-          data: {
-            staff_id:                staffId,
-            month:                   monthStart,
-            total_bookings:          1,
-            total_estimated_minutes: estimated,
-            total_actual_minutes:    actual,
-            average_efficiency:      efficiency,
-            on_time_count:           isOnTime ? 1 : 0,
-            delayed_count:           isOnTime ? 0 : 1,
-            avg_delay_minutes:       isOnTime ? 0 : delayAmt,
-          },
-        });
-      }
-    });
   }
 }

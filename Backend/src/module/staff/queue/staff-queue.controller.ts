@@ -59,19 +59,19 @@ export class StaffQueueController {
     } catch (err) { next(err); }
   }
 
-  static async reportDelay(req: AuthRequest, res: Response, next: NextFunction) {
-    try {
-      const { booking_id, delay_minutes } = req.body;
-      if (!booking_id?.trim())            throw new BadRequestError("booking_id is required.");
-      if (!Number.isInteger(delay_minutes)) throw new BadRequestError("delay_minutes must be an integer.");
-      const data = await StaffQueueService.reportDelay(
-        req.user!.userId,
-        booking_id.trim(),
-        delay_minutes,
-      );
-      res.json(successResponse(data, `Queue shifted by ${delay_minutes} min.`));
-    } catch (err) { next(err); }
-  }
+  // static async reportDelay(req: AuthRequest, res: Response, next: NextFunction) {
+  //   try {
+  //     const { booking_id, delay_minutes } = req.body;
+  //     if (!booking_id?.trim())            throw new BadRequestError("booking_id is required.");
+  //     if (!Number.isInteger(delay_minutes)) throw new BadRequestError("delay_minutes must be an integer.");
+  //     const data = await StaffQueueService.reportDelay(
+  //       req.user!.userId,
+  //       booking_id.trim(),
+  //       delay_minutes,
+  //     );
+  //     res.json(successResponse(data, `Queue shifted by ${delay_minutes} min.`));
+  //   } catch (err) { next(err); }
+  // }
 
   static async rebuildQueue(req: AuthRequest, res: Response, next: NextFunction) {
     try {

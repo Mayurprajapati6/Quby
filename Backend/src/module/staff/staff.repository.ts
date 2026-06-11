@@ -17,11 +17,13 @@ export class StaffRepository {
           include: {
             service_offering: {
               include: {
-                platform_service: { select: { id: true, name: true, category: true } },
+                // ✅ FIX: include image_url so profile can show service image
+                platform_service: { select: { id: true, name: true, category: true, image_url: true } },
               },
             },
           },
-          where: { is_available: true },
+          // ✅ FIX: removed `where: { is_available: true }` — show ALL assigned services
+          orderBy: { created_at: "asc" },
         },
         schedules: { orderBy: { day_of_week: "asc" } },
       },
@@ -53,11 +55,12 @@ export class StaffRepository {
           include: {
             service_offering: {
               include: {
-                platform_service: { select: { id: true, name: true, category: true } },
+                platform_service: { select: { id: true, name: true, category: true, image_url: true } },
               },
             },
           },
-          where: { is_available: true },
+          // ✅ FIX: show all assigned services, not just is_available: true
+          orderBy: { created_at: "asc" },
         },
         schedules: { orderBy: { day_of_week: "asc" } },
       },

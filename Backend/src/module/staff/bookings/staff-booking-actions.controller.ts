@@ -21,7 +21,7 @@ export class StaffBookingActionsController {
         scan_method ?? "CAMERA",
       );
 
-      res.json(successResponse(data, "Check-in successful."));
+      res.json(successResponse(data, "Service started successfully."));
     } catch (err) { next(err); }
   }
 

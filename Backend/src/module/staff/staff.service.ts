@@ -30,8 +30,6 @@ function toDTO(s: any) {
     is_verified:      s.is_verified,
     average_rating:   s.average_rating  ?? 0,
     total_reviews:    s.total_reviews   ?? 0,
-    current_streak:   s.current_service_streak ?? 0,
-    longest_streak:   s.longest_service_streak ?? 0,
     join_date:        toISTDate(s.created_at),
     business: {
       id:            s.business.id,
@@ -45,6 +43,9 @@ function toDTO(s: any) {
       id:               sv.id,
       name:             sv.service_offering.platform_service.name,
       category:         sv.service_offering.platform_service.category ?? null,
+      image_url:        sv.service_offering.platform_service.image_url ?? null,
+      price:            sv.service_offering.price ? Math.round(sv.service_offering.price / 100) : null,
+      discounted_price: sv.service_offering.discounted_price ? Math.round(sv.service_offering.discounted_price / 100) : null,
       duration_minutes: sv.duration_minutes,
       is_available:     sv.is_available,
     })),

@@ -14,9 +14,7 @@ import { staffBookingsRouter } from "./bookings/staff-bookings.routes";
 import { staffReviewsRouter }  from "./reviews/staff-reviews.routes";
 import { staffHolidayRouter } from "./holiday/staff-holiday.routes";
 import { staffQrLogRouter } from "./qr-log/staff-qr-log.routes";
-import { staffEscrowRouter } from "./escrow/staff-escrow.routes";
 import { staffDashboardRouter } from "./dashboard/staff-dashboard.routes";
-import { staffAttendanceRouter } from "./attendance/staff-attendance.routes";
 import { staffNotificationsRouter } from "./notifications/staff-notifications.routes";
 import { staffLeaveRouter } from "./leave/staff-leave.routes";
 
@@ -48,8 +46,6 @@ staffRouter.use("/bookings", staffBookingsRouter);
 staffRouter.use("/reviews", staffReviewsRouter);
 staffRouter.use("/holiday", staffHolidayRouter);
 staffRouter.use("/qr-log", staffQrLogRouter);
-staffRouter.use("/escrow", staffEscrowRouter);
 staffRouter.use("/dashboard", staffDashboardRouter);
 staffRouter.use("/leave", staffLeaveRouter);
-staffRouter.use("/attendance", staffAttendanceRouter);
 staffRouter.use("/notifications", staffNotificationsRouter);

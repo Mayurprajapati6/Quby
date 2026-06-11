@@ -12,43 +12,104 @@ export class StaffBookingsRepository {
       take:    number;
     },
   ) {
+    const today = startOfDay(new Date());
+
     const where: any = {
-      staff_id: staffId,
-      status:   { not: "PENDING_PAYMENT" },
+      staff_id:   staffId,
+      is_visible: { not: false },
+      status:     { notIn: ["PENDING_PAYMENT", "EXPIRED"] },
     };
 
     if (opts.date) {
-      where.service_date = startOfDay(new Date(`${opts.date}T00:00:00+05:30`));
+      const dayStart = startOfDay(new Date(`${opts.date}T00:00:00+05:30`));
+      const dayEnd   = new Date(dayStart);
+      dayEnd.setDate(dayEnd.getDate() + 1);
+      where.service_date = { gte: dayStart, lt: dayEnd };
     }
 
     if (opts.status) {
       switch (opts.status) {
         case "upcoming":
-          where.status = { in: ["CONFIRMED"] };
-          where.service_date = { gte: startOfDay(new Date()) };
+          where.status = "CONFIRMED";
+          if (!opts.date) where.service_date = { gt: today };
           break;
         case "running":
-          where.status = { in: ["CHECKED_IN", "IN_PROGRESS"] };
+          // ALL RUNNING — awaiting check-in + in-progress
+          // Frontend distinguishes via service_started_at
+          where.status = "RUNNING";
           break;
         case "completed":
           where.status = "COMPLETED";
           break;
         case "cancelled":
-          where.status = { in: ["CANCELLED", "CANCELLED_TIMEOUT", "CANCELLED_NO_SHOW"] };
+          where.status = { in: ["CANCELLED", "REFUND_INITIATED", "REFUNDED"] };
+          break;
+        case "no_show":
+          where.status = "NO_SHOW";
+          break;
+        case "refund":
+          where.status = { in: ["REFUND_INITIATED", "REFUNDED"] };
+          break;
+        default:
           break;
       }
+    }
+
+    // Running: sort awaiting-first (nulls first = service hasn't started), then in-progress
+    let orderBy: any = [{ created_at: "desc" }];
+    if (opts.status === "running") {
+      orderBy = [
+        { service_started_at: { sort: "asc", nulls: "first" } },
+        { queue_number: "asc" },
+      ];
+    } else if (opts.status === "upcoming") {
+      orderBy = [{ service_start_time: "asc" }, { queue_number: "asc" }];
+    } else if (opts.status === "completed" || opts.status === "no_show") {
+      orderBy = [{ service_date: "desc" }, { service_start_time: "desc" }];
     }
 
     const [bookings, total] = await Promise.all([
       prisma.booking.findMany({
         where,
-        include: {
-          customer: { select: { id: true, name: true, avatar_url: true, phone: true } },
-          review:   { select: { id: true, overall_rating: true } },
+        select: {
+          id:                  true,
+          booking_number:      true,
+          status:              true,
+          service_date:        true,
+          service_start_time:  true,
+          estimated_duration:  true,
+          queue_number:        true,
+          service_amount:      true,
+          services:            true,
+          cancellation_reason: true,
+          cancelled_at:        true,
+          notes:               true,
+          // ✅ ADDED: drives Running sub-state display on staff card + InsightStrip counts
+          //   null  → "Awaiting Check-In" (arrival open, QR not yet scanned)
+          //   set   → "In Progress" (QR scanned, service running)
+          service_started_at:   true,
+          service_completed_at: true,
+          checked_in_at:        true,
+          actual_duration:      true,
+          customer: {
+            select: { id: true, name: true, avatar_url: true, phone: true },
+          },
+          payment: {
+            select: {
+              id:            true,
+              status:        true,
+              amount:        true,
+              refund_status: true,
+              refund_amount: true,
+              paid_at:       true,
+              settled_at:    true,
+            },
+          },
+          review: { select: { id: true, rating: true } },
         },
-        orderBy: [{ service_date: "desc" }, { queue_number: "asc" }],
-        skip:    opts.skip,
-        take:    opts.take,
+        orderBy,
+        skip: opts.skip,
+        take: opts.take,
       }),
       prisma.booking.count({ where }),
     ]);
@@ -58,28 +119,46 @@ export class StaffBookingsRepository {
 
   static async findById(bookingId: string, staffId: string) {
     return prisma.booking.findFirst({
-      where:   { id: bookingId, staff_id: staffId },
-      include: {
+      where: { id: bookingId, staff_id: staffId },
+      select: {
+        id:                  true,
+        booking_number:      true,
+        status:              true,
+        service_date:        true,
+        service_start_time:  true,
+        estimated_duration:  true,
+        queue_number:        true,
+        service_amount:      true,
+        services:            true,
+        cancellation_reason: true,
+        cancelled_at:        true,
+        notes:               true,
+        service_started_at:   true,
+        service_completed_at: true,
+        checked_in_at:        true,
+        actual_duration:      true,
         customer: {
           select: {
             id: true, name: true, phone: true, avatar_url: true,
             user: { select: { id: true, email: true } },
           },
         },
-        transaction: {
-          select: { status: true, amount: true, razorpay_payment_id: true, paid_at: true },
-        },
         qr_code: {
-          select: { qr_image_url: true, is_used: true, used_at: true, expires_at: true },
+          select: { qr_image_url: true, is_used: true, used_at: true, qr_status: true },
         },
-        escrow: {
-          select: { id: true, status: true, amount: true, scheduled_release_at: true, released_at: true },
+        payment: {
+          select: {
+            id:            true,
+            status:        true,
+            amount:        true,
+            refund_status: true,
+            refund_amount: true,
+            paid_at:       true,
+            settled_at:    true,
+          },
         },
         review: {
-          select: {
-            id: true, overall_rating: true, staff_rating: true,
-            staff_comment: true, staff_response: true, staff_response_at: true,
-          },
+          select: { id: true, rating: true, comment: true },
         },
       },
     });
