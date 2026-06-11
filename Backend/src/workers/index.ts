@@ -1,27 +1,33 @@
-import logger from '../config/logger.config';
-import emailWorker        from './email.worker';
-import escrowWorker       from './escrow.worker';
-import notificationWorker from './notification.worker';
-import bookingWorker      from './booking.worker';
+import { emailWorker } from "./email.worker";
+import { settleWorker } from "./settle.worker";
+import { refundWorker } from "./refund.worker";
+import { bookingWorker } from "./booking.worker";
+import { notificationWorker } from "./notification.worker";
+import { analyticsWorker } from "./analytics.worker";
+import logger from "../config/logger.config";
 
 const workers = [
-    { worker: emailWorker,        name: 'email-worker',        concurrency: 5  },
-    { worker: escrowWorker,       name: 'escrow-worker',       concurrency: 10 },
-    { worker: notificationWorker, name: 'notification-worker', concurrency: 10 },
-    { worker: bookingWorker,      name: 'booking-worker',      concurrency: 20 },
+  emailWorker,
+  settleWorker,
+  refundWorker,
+  bookingWorker,
+  notificationWorker,
+  analyticsWorker,
 ];
 
-export function startWorkers(): void {
-    logger.info(`[Workers] Starting ${workers.length} workers...`);
-    workers.forEach(({ name, concurrency }) => {
-        logger.info(`[Workers] ${name} (concurrency: ${concurrency})`);
-    });
+export async function startWorkers(): Promise<void> {
+  logger.info("[Workers] All BullMQ workers are active.");
+  logger.info(`[Workers] Running: ${workers.map(w => w.name).join(", ")}`);
 }
 
 export async function stopWorkers(): Promise<void> {
-    logger.info('[Workers] Shutting down workers...');
-    await Promise.all(workers.map(({ worker }) => worker.close()));
-    logger.info('[Workers] All workers stopped');
+  await Promise.all(workers.map(w => w.close()));
+  logger.info("[Workers] All BullMQ workers stopped.");
 }
 
-export { emailWorker, escrowWorker, notificationWorker, bookingWorker };
+export { emailWorker }  from "./email.worker";
+export { settleWorker } from "./settle.worker";
+export { refundWorker } from "./refund.worker";
+export { bookingWorker } from "./booking.worker";
+export { notificationWorker } from "./notification.worker";
+export { analyticsWorker } from "./analytics.worker";

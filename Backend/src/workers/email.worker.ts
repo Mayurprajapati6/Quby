@@ -1,97 +1,30 @@
-import { Worker, Job } from 'bullmq';
-import { redisClient } from '../config/redis';
-import { sendEmail } from '../../src/services/email.services';
-import { QUEUE_NAMES, deadLetterQueue, DeadLetterJobData } from '../config/bullmq';
-import logger from '../config/logger.config';
-import type { EmailJobType } from '../config/bullmq';
-//import { OwnerStaffService } from '../module/owner/staff/owner-staff.service';
+import { Worker, Job } from "bullmq";
+import { redisClient } from "../config/redis";
+import { processEmail } from "../services/email.services";
+import { deadLetterQueue as dlqQueue, QUEUE_NAMES } from "../config/bullmq";
+import type { EmailJobPayload } from "../config/bullmq";
+import logger from "../config/logger.config";
 
-interface EmailJobData {
-    to:   string;
-    type: EmailJobType;
-    data: Record<string, unknown>;
-}
-
-// Separate type for the delayed reinvitation job — has no 'to'/'type' fields
-interface ReinvitationJobData {
-    staffUserId: string;
-    businessId:  string;
-    ownerId:     string;
-}
-
-export const emailWorker = new Worker<EmailJobData | ReinvitationJobData>(
-    QUEUE_NAMES.EMAIL,
-    async (job: Job<EmailJobData | ReinvitationJobData>) => {
-
-        // ── Auto-reinvitation branch ──────────────────────────────────────────
-        // These are delayed BullMQ jobs, not standard email jobs.
-        // They carry staffUserId/businessId/ownerId instead of to/type/data.
-        if (job.name === 'staff-reinvitation') {
-            const { staffUserId, businessId, ownerId } = job.data as ReinvitationJobData;
-            logger.info(`[Email Worker] Processing auto-reinvitation for staff user ${staffUserId}`);
-            //await OwnerStaffService.processAutoReinvitation(staffUserId, businessId, ownerId);
-            return { success: true, type: 'staff-reinvitation', staffUserId };
-        }
-
-        // ── Standard email branch ─────────────────────────────────────────────
-        const { to, type, data } = job.data as EmailJobData;
-        logger.info(`[Email Worker] Processing job ${job.id}: '${type}' → ${to}`);
-        await sendEmail(to, type, data);
-        return { success: true, to, type };
-    },
-    {
-        connection:  redisClient,
-        concurrency: 5,
-        limiter: {
-            max:      100,
-            duration: 60_000,
-        },
-    }
+export const emailWorker = new Worker(
+  QUEUE_NAMES.EMAIL,
+  async (job: Job<EmailJobPayload>) => {
+    logger.info(`[EmailWorker] Processing job ${job.id} type=${job.data.type}`);
+    await processEmail(job.data);
+    logger.info(`[EmailWorker] Completed job ${job.id}`);
+  },
+  {
+    connection:  redisClient,
+    concurrency: 5,
+  }
 );
 
-emailWorker.on('completed', (job) => {
-    if (job.name === 'staff-reinvitation') {
-        const { staffUserId } = job.data as ReinvitationJobData;
-        logger.info(`[Email Worker] Job ${job.id} completed (staff-reinvitation → user ${staffUserId})`);
-        return;
-    }
-    const { type, to } = job.data as EmailJobData;
-    logger.info(`[Email Worker] Job ${job.id} completed (${type} → ${to})`);
+emailWorker.on("failed", async (job, err) => {
+  logger.error(`[EmailWorker] Job ${job?.id} failed:`, err.message);
+  if (job && job.attemptsMade >= (job.opts.attempts ?? 3)) {
+    await dlqQueue.add("email-dlq", { originalJob: job.data, error: err.message });
+  }
 });
 
-emailWorker.on('failed', async (job, err) => {
-    logger.error(`[Email Worker] Job ${job?.id} failed (attempt ${job?.attemptsMade}): ${err.message}`);
-
-    if (job && job.attemptsMade >= (job.opts.attempts ?? 3)) {
-        logger.error(`[Email Worker] All retries exhausted for job ${job.id} — routing to DLQ`, {
-            jobName: job.name,
-            error:   err.message,
-            ...(job.name === 'staff-reinvitation'
-                ? { staffUserId: (job.data as ReinvitationJobData).staffUserId }
-                : { type: (job.data as EmailJobData).type, recipient: (job.data as EmailJobData).to }
-            ),
-        });
-
-        try {
-            const dlqPayload: DeadLetterJobData = {
-                originalQueue: QUEUE_NAMES.EMAIL,
-                originalJobId: job.id,
-                jobName:       job.name,
-                jobData:       job.data,
-                error:         err.message,
-                attemptsMade:  job.attemptsMade,
-                failedAt:      new Date().toISOString(),
-            };
-            await deadLetterQueue.add('dead-email', dlqPayload);
-            logger.info(`[Email Worker] Job ${job.id} moved to DLQ`);
-        } catch (dlqErr) {
-            logger.error('[Email Worker] Failed to push to DLQ:', dlqErr);
-        }
-    }
+emailWorker.on("error", (err) => {
+  logger.error("[EmailWorker] Worker error:", err.message);
 });
-
-emailWorker.on('error', (err) => {
-    logger.error('[Email Worker] Worker error:', err.message);
-});
-
-export default emailWorker;
