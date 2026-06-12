@@ -6,205 +6,243 @@ import { redisPub, redisSub } from '../config/redis';
 import { serverConfig } from '../config';
 import logger from '../config/logger.config';
 import type {
-    ServerToClientEvents,
-    ClientToServerEvents,
-    InterServerEvents,
-    SocketData,
-    BookingConfirmedPayload,
-    BookingCancelledPayload,
-    BookingNoShowPayload,
-    ServiceCheckedInPayload,
-    ServiceCompletedPayload,
-    ServiceDelayedPayload,
-    QueueUpdatedPayload,
-    PaymentReceivedPayload,
-    EscrowReleasedPayload,
-    BusinessApprovedPayload,
-    BusinessRejectedPayload,
-    LeaveApprovedPayload,
-    LeaveRejectedPayload,
-    LeaveRequestedPayload,
-    NewNotificationPayload,
+  ServerToClientEvents,
+  ClientToServerEvents,
+  InterServerEvents,
+  SocketData,
+  BookingConfirmedPayload,
+  BookingCancelledPayload,
+  BookingNoShowPayload,
+  ServiceCheckedInPayload,
+  ServiceCompletedPayload,
+  ServiceDelayedPayload,
+  QueueUpdatedPayload,
+  PaymentReceivedPayload,
+  EscrowReleasedPayload,
+  BusinessSubmittedPayload,
+  BusinessApprovedPayload,
+  BusinessRejectedPayload,
+  LeaveApprovedPayload,
+  LeaveRejectedPayload,
+  LeaveRequestedPayload,
+  NewNotificationPayload,
 } from './socket.types';
 
 export type TypedSocketServer = SocketServer<
-    ClientToServerEvents,
-    ServerToClientEvents,
-    InterServerEvents,
-    SocketData
+  ClientToServerEvents,
+  ServerToClientEvents,
+  InterServerEvents,
+  SocketData
 >;
 
 type TypedSocket = Socket<
-    ClientToServerEvents,
-    ServerToClientEvents,
-    InterServerEvents,
-    SocketData
+  ClientToServerEvents,
+  ServerToClientEvents,
+  InterServerEvents,
+  SocketData
 >;
 
 let io: TypedSocketServer | null = null;
 
 export function initSocket(httpServer: HttpServer): TypedSocketServer {
-    io = new SocketServer<
-                ClientToServerEvents,
-                ServerToClientEvents,
-                InterServerEvents,
-                SocketData
-            >(httpServer, {
-                cors: {
-                    origin:      serverConfig.CORS_ORIGIN ?? '*',
-                    credentials: true,
-                },
-                pingTimeout:  20_000,
-                pingInterval: 25_000,
-            });
+  io = new SocketServer<ClientToServerEvents, ServerToClientEvents, InterServerEvents, SocketData>(
+    httpServer,
+    {
+      cors: {
+        origin:      serverConfig.CORS_ORIGIN ?? '*',
+        credentials: true,
+      },
+      pingTimeout:  20_000,
+      pingInterval: 25_000,
+    }
+  );
 
-    io.adapter(createAdapter(redisPub, redisSub));
-    logger.info('[Socket.io] Redis adapter attached');
+  io.adapter(createAdapter(redisPub, redisSub));
+  logger.info('[Socket.io] Redis adapter attached');
 
-    io.use(authMiddleware);
-    io.on('connection', handleConnection);
+  io.use(authMiddleware);
+  io.on('connection', handleConnection);
 
-    logger.info('[Socket.io] Server initialized');
-    return io;
+  logger.info('[Socket.io] Server initialized');
+  return io;
 }
 
 async function authMiddleware(socket: TypedSocket, next: (err?: Error) => void) {
-    try {
-        const token =
-            socket.handshake.auth.token ||
-            socket.handshake.headers.authorization?.replace('Bearer ', '');
+  try {
+    const token =
+      socket.handshake.auth.token ||
+      socket.handshake.headers.authorization?.replace('Bearer ', '');
 
-        if (!token) {
-            return next(new Error('Authentication required'));
-        }
+    if (!token) return next(new Error('Authentication required'));
 
-        const payload = jwt.verify(token, serverConfig.JWT_SECRET) as {
-            userId:   string;
-            role:     'CUSTOMER' | 'STAFF' | 'OWNER' | 'ADMIN';
-            entityId: string;
-        };
+    const payload = jwt.verify(token, serverConfig.JWT_SECRET) as {
+      userId:      string;
+      role:        'CUSTOMER' | 'STAFF' | 'OWNER' | 'ADMIN';
+      entityId:    string;
+      businessId?: string;
+    };
 
-        socket.data.userId   = payload.userId;
-        socket.data.role     = payload.role;
-        socket.data.entityId = payload.entityId;
+    socket.data.userId     = payload.userId;
+    socket.data.role       = payload.role;
+    socket.data.entityId   = payload.entityId;
+    socket.data.businessId = payload.businessId;
 
-        next();
-    } catch {
-        next(new Error('Invalid or expired token'));
-    }
+    next();
+  } catch {
+    next(new Error('Invalid or expired token'));
+  }
 }
 
 function handleConnection(socket: TypedSocket) {
-    const { userId, role, entityId } = socket.data;
-    logger.info(`[Socket.io] Connected: ${userId} (${role})`);
+  const { userId, role, entityId, businessId } = socket.data;
+  logger.info(`[Socket.io] Connected: ${userId} (${role})`);
 
-    socket.join(`user:${userId}`);
-    socket.join(`role:${role}`);
+  socket.join(`user:${userId}`);
+  socket.join(`role:${role}`);
 
-    switch (role) {
-        case 'STAFF':
-            socket.join(`queue:staff:${entityId}`);
-            break;
-        case 'ADMIN':
-            socket.join('role:admin');
-            break;
+  switch (role) {
+    case 'STAFF':
+      socket.join(`queue:staff:${entityId}`);
+      break;
+    case 'ADMIN':
+      socket.join('role:admin');
+      break;
+    case 'BUSINESS':
+      if (businessId) {
+        socket.join(`business:${businessId}`);
+        logger.info(`[Socket.io] BUSINESS ${userId} auto-joined business:${businessId}`);
+      }
+      break;
+  }
+
+  socket.on('join:business', (bId: string) => {
+    if (role === 'OWNER' || role === 'ADMIN') {
+      socket.join(`business:${bId}`);
+      logger.info(`[Socket.io] ${userId} joined business:${bId}`);
     }
+  });
 
-    socket.on('join:business', (businessId: string) => {
-        if (['OWNER', 'ADMIN'].includes(role)) {
-            socket.join(`business:${businessId}`);
-            logger.info(`[Socket.io] ${userId} joined business:${businessId}`);
-        }
-    });
+  socket.on('leave:business', (bId: string) => {
+    socket.leave(`business:${bId}`);
+  });
 
-    socket.on('leave:business', (businessId: string) => {
-        socket.leave(`business:${businessId}`);
-    });
-
-    socket.on('disconnect', (reason) => {
-        logger.info(`[Socket.io] Disconnected: ${userId} (${reason})`);
-    });
+  socket.on('disconnect', (reason) => {
+    logger.info(`[Socket.io] Disconnected: ${userId} (${reason})`);
+  });
 }
 
 export function getIO(): TypedSocketServer {
-    if (!io) throw new Error('[Socket.io] Not initialized — call initSocket first');
-    return io;
+  if (!io) throw new Error('[Socket.io] Not initialized — call initSocket first');
+  return io;
 }
 
-const e = (room: string, event: keyof ServerToClientEvents, data: any) => {
-    getIO().to(room).emit(event as any, data);
-};
+function userRoom(userId: string)         { return getIO().to(`user:${userId}`); }
+function staffQueueRoom(staffId: string)  { return getIO().to(`queue:staff:${staffId}`); }
+function businessRoom(businessId: string) { return getIO().to(`business:${businessId}`); }
+function adminRoom()                      { return getIO().to('role:admin'); }
 
 export const socketService = {
 
-    notifyBookingConfirmed(customerUserId: string, staffUserId: string, businessId: string, payload: BookingConfirmedPayload) {
-        e(`user:${customerUserId}`, 'booking:confirmed', payload);
-        e(`user:${staffUserId}`,    'booking:confirmed', payload);
-        e(`business:${businessId}`, 'booking:confirmed', payload);
-    },
+  notifyBookingConfirmed(customerUserId: string, staffUserId: string, businessId: string, payload: BookingConfirmedPayload): void {
+    userRoom(customerUserId).emit('booking:confirmed', payload);
+    userRoom(staffUserId).emit('booking:confirmed', payload);
+    businessRoom(businessId).emit('booking:confirmed', payload);
+  },
 
-    notifyBookingCancelled(customerUserId: string, staffUserId: string, businessId: string, payload: BookingCancelledPayload) {
-        e(`user:${customerUserId}`, 'booking:cancelled', payload);
-        e(`user:${staffUserId}`,    'booking:cancelled', payload);
-        e(`business:${businessId}`, 'booking:cancelled', payload);
-    },
+  notifyBookingCancelled(customerUserId: string, staffUserId: string, businessId: string, payload: BookingCancelledPayload): void {
+    userRoom(customerUserId).emit('booking:cancelled', payload);
+    userRoom(staffUserId).emit('booking:cancelled', payload);
+    businessRoom(businessId).emit('booking:cancelled', payload);
+  },
 
-    notifyNoShow(staffUserId: string, businessId: string, payload: BookingNoShowPayload) {
-        e(`user:${staffUserId}`,    'booking:no_show', payload);
-        e(`business:${businessId}`, 'booking:no_show', payload);
-    },
+  notifyNoShow(staffUserId: string, businessId: string, payload: BookingNoShowPayload): void {
+    userRoom(staffUserId).emit('booking:no_show', payload);
+    businessRoom(businessId).emit('booking:no_show', payload);
+  },
 
-    notifyCheckedIn(customerUserId: string, staffUserId: string, businessId: string, payload: ServiceCheckedInPayload) {
-        e(`user:${customerUserId}`, 'service:checked_in', payload);
-        e(`user:${staffUserId}`,    'service:checked_in', payload);
-        e(`business:${businessId}`, 'service:checked_in', payload);
-    },
+  notifyCheckedIn(customerUserId: string, staffUserId: string, businessId: string, payload: ServiceCheckedInPayload): void {
+    userRoom(customerUserId).emit('service:checked_in', payload);
+    userRoom(staffUserId).emit('service:checked_in', payload);
+    businessRoom(businessId).emit('service:checked_in', payload);
+  },
 
-    notifyServiceCompleted(customerUserId: string, businessId: string, payload: ServiceCompletedPayload) {
-        e(`user:${customerUserId}`, 'service:completed', payload);
-        e(`business:${businessId}`, 'service:completed', payload);
-    },
+  notifyServiceCompleted(customerUserId: string, businessId: string, payload: ServiceCompletedPayload): void {
+    userRoom(customerUserId).emit('service:completed', payload);
+    businessRoom(businessId).emit('service:completed', payload);
+  },
 
-    notifyDelay(customerUserId: string, staffId: string, payload: ServiceDelayedPayload) {
-        e(`user:${customerUserId}`, 'service:delayed', payload);
-        e(`queue:staff:${staffId}`, 'service:delayed', payload);
-    },
+  notifyDelay(customerUserId: string, staffId: string, payload: ServiceDelayedPayload): void {
+    userRoom(customerUserId).emit('service:delayed', payload);
+    staffQueueRoom(staffId).emit('service:delayed', payload);
+  },
 
-    notifyQueueUpdated(staffId: string, businessId: string, payload: QueueUpdatedPayload) {
-        e(`queue:staff:${staffId}`, 'queue:updated', payload);
-        e(`business:${businessId}`, 'queue:updated', payload);
-    },
+  notifyQueueUpdated(staffId: string, businessId: string, payload: QueueUpdatedPayload): void {
+    staffQueueRoom(staffId).emit('queue:updated', payload);
+    businessRoom(businessId).emit('queue:updated', payload);
+  },
 
-    notifyPaymentReceived(businessId: string, payload: PaymentReceivedPayload) {
-        e(`business:${businessId}`, 'payment:received', payload);
-    },
+  notifyPaymentReceived(businessId: string, payload: PaymentReceivedPayload): void {
+    businessRoom(businessId).emit('payment:received', payload);
+  },
 
-    notifyEscrowReleased(ownerUserId: string, payload: EscrowReleasedPayload) {
-        e(`user:${ownerUserId}`, 'escrow:released', payload);
-    },
+  notifyEscrowReleased(ownerUserId: string, businessId: string, payload: EscrowReleasedPayload): void {
+    userRoom(ownerUserId).emit('escrow:released', payload);
+    businessRoom(businessId).emit('escrow:released', payload);
+  },
 
-    notifyBusinessApproved(ownerUserId: string, payload: BusinessApprovedPayload) {
-        e(`user:${ownerUserId}`, 'business:approved', payload);
-        e('role:admin',           'business:approved', payload);
-    },
+  notifyBusinessSubmitted(payload: BusinessSubmittedPayload): void {
+    adminRoom().emit('business:submitted', payload);
+  },
 
-    notifyBusinessRejected(ownerUserId: string, payload: BusinessRejectedPayload) {
-        e(`user:${ownerUserId}`, 'business:rejected', payload);
-    },
+  notifyBusinessApproved(ownerUserId: string, payload: BusinessApprovedPayload): void {
+    userRoom(ownerUserId).emit('business:approved', payload);
+    adminRoom().emit('business:approved', payload);
+  },
 
-    notifyLeaveApproved(staffUserId: string, payload: LeaveApprovedPayload) {
-        e(`user:${staffUserId}`, 'staff:leave_approved', payload);
-    },
+  notifyBusinessRejected(ownerUserId: string, payload: BusinessRejectedPayload): void {
+    userRoom(ownerUserId).emit('business:rejected', payload);
+  },
 
-    notifyLeaveRejected(staffUserId: string, payload: LeaveRejectedPayload) {
-        e(`user:${staffUserId}`, 'staff:leave_rejected', payload);
-    },
+  notifyLeaveRequested(ownerUserId: string, payload: LeaveRequestedPayload): void {
+    userRoom(ownerUserId).emit('staff:leave_requested', payload);
+  },
 
-    notifyLeaveRequested(ownerUserId: string, payload: LeaveRequestedPayload) {
-        e(`user:${ownerUserId}`, 'staff:leave_requested', payload);
-    },
+  notifyLeaveApproved(staffUserId: string, payload: LeaveApprovedPayload): void {
+    userRoom(staffUserId).emit('staff:leave_approved', payload);
+  },
 
-    notifyNew(userId: string, payload: NewNotificationPayload) {
-        e(`user:${userId}`, 'notification:new', payload);
-    },
+  notifyLeaveRejected(staffUserId: string, payload: LeaveRejectedPayload): void {
+    userRoom(staffUserId).emit('staff:leave_rejected', payload);
+  },
+
+  notifyNew(userId: string, payload: NewNotificationPayload): void {
+    userRoom(userId).emit('notification:new', payload);
+  },
 };
+
+const SPEC_ALIAS: Record<string, string> = {
+  "queue:updated":    "QUEUE_UPDATED",
+  "service:checked_in": "BOOKING_STARTED",
+  "service:completed":  "BOOKING_COMPLETED",
+  "booking:cancelled":  "BOOKING_CANCELLED",
+};
+
+export function emitToUser(userId: string, event: string, payload: unknown): void {
+  try {
+    const io = getIO();
+    io.to(`user:${userId}`).emit(event as any, payload as any);
+    const alias = SPEC_ALIAS[event];
+    if (alias) io.to(`user:${userId}`).emit(alias as any, payload as any);
+  } catch {
+  }
+}
+
+export function emitToBusiness(businessId: string, event: string, payload: unknown): void {
+  try {
+    const io = getIO();
+    io.to(`business:${businessId}`).emit(event as any, payload as any);
+    const alias = SPEC_ALIAS[event];
+    if (alias) io.to(`business:${businessId}`).emit(alias as any, payload as any);
+  } catch {
+  }
+}
