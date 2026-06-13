@@ -13,6 +13,7 @@ type ServerConfig = {
     CLOUDINARY_API_SECRET: string,
     CORS_ORIGIN: string,
     CLIENT_URL: string,
+    REDIS_URL: string;
     REDIS_PORT?: number,
     REDIS_HOST?: string,
     REDIS_PASSWORD?: string,
@@ -44,7 +45,8 @@ export const serverConfig: ServerConfig = {
     CLOUDINARY_API_KEY: process.env.CLOUDINARY_API_KEY || "",
     CLOUDINARY_API_SECRET: process.env.CLOUDINARY_API_SECRET || "",
     CORS_ORIGIN: process.env.CORS_ORIGIN || "",
-    CLIENT_URL: process.env.CORS_ORIGIN || "",
+    CLIENT_URL: process.env.CLIENT_URL  || "",
+    REDIS_URL: process.env.REDIS_URL || '',
     REDIS_PORT: process.env.REDIS_PORT ? Number(process.env.REDIS_PORT) : 6379,
     REDIS_HOST: process.env.REDIS_HOST || 'localhost',
     REDIS_PASSWORD: process.env.REDIS_PASSWORD || "",
