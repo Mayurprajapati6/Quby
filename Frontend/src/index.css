@@ -1,9 +1,9 @@
+/* ── Google Fonts preload ── */
+@import url('https://fonts.googleapis.com/css2?family=Outfit:wght@600;700;800;900&family=Inter:wght@300;400;500;600;700&family=Syne:wght@700;800;900&family=DM+Sans:ital,opsz,wght@0,9..40,300;0,9..40,400;0,9..40,500;1,9..40,400&family=JetBrains+Mono:wght@400;500&display=swap');
+
 @tailwind base;
 @tailwind components;
 @tailwind utilities;
-
-/* ── Google Fonts preload ── */
-@import url('https://fonts.googleapis.com/css2?family=Outfit:wght@600;700;800;900&family=Inter:wght@300;400;500;600;700&family=Syne:wght@700;800;900&family=DM+Sans:ital,opsz,wght@0,9..40,300;0,9..40,400;0,9..40,500;1,9..40,400&family=JetBrains+Mono:wght@400;500&display=swap');
 
 /* ──────────────────────────────────────────
    DARK THEME  — "FlexPass Slate"
@@ -56,9 +56,9 @@
 }
 
 /* ──────────────────────────────────────────
-   LIGHT THEME — "Hospital Blue"
+   REMOVED LIGHT THEME — "Hospital Blue"
 ─────────────────────────────────────────── */
-[data-theme="light"] {
+:where(.q-no-light-theme) {
   --bg-page:    #dce8f8;
   --bg-surface: #eef5ff;
   --bg-card:    #ffffff;
@@ -206,7 +206,7 @@ body {
   color: #fff;
   box-shadow: 0 0 20px rgba(99,102,241,0.35);
 }
-[data-theme="light"] .q-btn-primary {
+:where(.q-no-light-theme) .q-btn-primary {
   background: linear-gradient(135deg, #3B7FFF, #6366F1);
   color: #fff;
   box-shadow: 0 4px 18px rgba(59,127,255,0.38);
@@ -252,7 +252,7 @@ body {
 .q-btn-danger:active { transform: scale(0.96); }
 .q-btn-danger:disabled { opacity: 0.45; cursor: not-allowed; }
 
-/* Pink button — used in light theme per design spec */
+/* Pink button — used in removed light theme per design spec */
 .q-btn-pink {
   font-family: 'Inter', system-ui, sans-serif;
   font-weight: 600;
@@ -269,7 +269,7 @@ body {
   gap: 6px;
   transition: opacity 0.15s, transform 0.1s;
 }
-[data-theme="light"] .q-btn-pink {
+:where(.q-no-light-theme) .q-btn-pink {
   background: var(--pink);
   color: #fff;
   border: none;
@@ -382,7 +382,7 @@ body {
 :root .progress-fill {
   background: linear-gradient(90deg, #7c3aed, #a78bfa);
 }
-[data-theme="light"] .progress-fill {
+:where(.q-no-light-theme) .progress-fill {
   background: linear-gradient(90deg, #3B7FFF, #5a95ff);
 }
 
@@ -419,11 +419,11 @@ body {
   box-shadow: 0 0 0 3px var(--violet-bg);
 }
 .q-input::placeholder { color: var(--text-3); }
-[data-theme="light"] .q-input {
+:where(.q-no-light-theme) .q-input {
   background: #fff;
   color: var(--text-1);
 }
-[data-theme="light"] .q-input:focus {
+:where(.q-no-light-theme) .q-input:focus {
   border-color: var(--violet);
   box-shadow: 0 0 0 3px var(--violet-bg);
 }
@@ -596,7 +596,7 @@ body {
 }
 
 /* ──────────────────────────────────────────
-   HERO GRADIENT (Light theme dashboard banner)
+   HERO GRADIENT (Removed removed light theme dashboard banner)
 ─────────────────────────────────────────── */
 .hero-gradient {
   background: linear-gradient(168deg, #9ec5ff 0%, #bdd8ff 22%, #cce5ff 48%, #e6f2ff 72%, #f5f9ff 100%);
@@ -875,32 +875,32 @@ nav.bottom-nav-scrollable > button {
 }
 
 /* ──────────────────────────────────────────
-   LIGHT THEME SPECIFIC OVERRIDES
+   REMOVED LIGHT THEME SPECIFIC OVERRIDES
    Ensure dark text is always visible on light bg
 ─────────────────────────────────────────── */
-[data-theme="light"] {
+:where(.q-no-light-theme) {
   /* Force text visibility on cards/surfaces */
   --text-heading: #0a1a4e;
   --text-body: #1e3a5f;
 }
 
-[data-theme="light"] .q-card {
+:where(.q-no-light-theme) .q-card {
   background: #ffffff;
   box-shadow: 0 4px 24px rgba(59,127,255,0.10), 0 1px 4px rgba(59,127,255,0.06);
 }
 
-[data-theme="light"] .q-surface {
+:where(.q-no-light-theme) .q-surface {
   background: #f0f6ff;
 }
 
 /* Any element that might render white text on light bg */
-[data-theme="light"] h1,
-[data-theme="light"] h2,
-[data-theme="light"] h3,
-[data-theme="light"] h4,
-[data-theme="light"] p,
-[data-theme="light"] span,
-[data-theme="light"] label {
+:where(.q-no-light-theme) h1,
+:where(.q-no-light-theme) h2,
+:where(.q-no-light-theme) h3,
+:where(.q-no-light-theme) h4,
+:where(.q-no-light-theme) p,
+:where(.q-no-light-theme) span,
+:where(.q-no-light-theme) label {
   color: inherit; /* inherit from parent — don't override, just ensure cascading */
 }
 
@@ -1008,29 +1008,29 @@ nav.bottom-nav-scrollable > button {
 }
 
 /* ──────────────────────────────────────────
-   LIGHT THEME — ADDITIONAL VISIBILITY FIXES
+   REMOVED LIGHT THEME — ADDITIONAL VISIBILITY FIXES
    Ensure no invisible text anywhere
 ─────────────────────────────────────────── */
-[data-theme="light"] .q-btn-ghost {
+:where(.q-no-light-theme) .q-btn-ghost {
   color: var(--violet);
   background: var(--violet-bg);
   border-color: var(--violet-border);
 }
 
-[data-theme="light"] .q-label {
+:where(.q-no-light-theme) .q-label {
   color: var(--text-2);
 }
 
-[data-theme="light"] .q-badge {
+:where(.q-no-light-theme) .q-badge {
   /* ensure badge text is visible */
   filter: none;
 }
 
 /* Tables in light mode */
-[data-theme="light"] table th {
+:where(.q-no-light-theme) table th {
   color: var(--text-2);
 }
-[data-theme="light"] table td {
+:where(.q-no-light-theme) table td {
   color: var(--text-1);
 }
 
@@ -1443,3 +1443,661 @@ nav.bottom-nav-scrollable > button {
     grid-template-columns: 1fr !important;
   }
 }
+
+/* --------------------------------------------------------------------------
+   QUBY DARK SYSTEM OVERRIDES
+   Final UI layer: one premium dark theme, consistent shell/forms/cards/tables.
+-------------------------------------------------------------------------- */
+:root,
+[data-theme="dark"],
+:where(.q-no-light-theme) {
+  --bg-page: #0d1020;
+  --bg-surface: #14182a;
+  --bg-card: #191e33;
+  --border: rgba(148, 163, 184, 0.14);
+  --border-2: rgba(167, 139, 250, 0.34);
+
+  --text-1: #f4f6ff;
+  --text-2: rgba(226, 232, 240, 0.76);
+  --text-3: rgba(148, 163, 184, 0.72);
+  --text-4: rgba(100, 116, 139, 0.8);
+
+  --violet: #8b5cf6;
+  --violet-light: #a78bfa;
+  --violet-lighter: #c4b5fd;
+  --violet-bg: rgba(139, 92, 246, 0.14);
+  --violet-border: rgba(167, 139, 250, 0.28);
+  --violet-glow: rgba(139, 92, 246, 0.26);
+
+  --green: #34d399;
+  --green-bg: rgba(52, 211, 153, 0.12);
+  --green-border: rgba(52, 211, 153, 0.24);
+  --pink: #f472b6;
+  --pink-bg: rgba(244, 114, 182, 0.13);
+  --blue: #60a5fa;
+  --blue-bg: rgba(96, 165, 250, 0.12);
+  --red: #fb7185;
+  --red-bg: rgba(251, 113, 133, 0.12);
+  --yellow: #fbbf24;
+
+  --sidebar-bg: rgba(10, 13, 27, 0.98);
+  --topbar-bg: rgba(10, 13, 27, 0.88);
+  --shadow-card: 0 18px 54px rgba(0, 0, 0, 0.24);
+  --shadow-btn: 0 14px 34px rgba(99, 102, 241, 0.28);
+  color-scheme: dark;
+}
+
+html,
+body {
+  min-width: 0;
+  overflow-x: hidden;
+}
+
+body {
+  background:
+    radial-gradient(circle at 8% -8%, rgba(20, 184, 166, 0.12), transparent 30rem),
+    radial-gradient(circle at 92% 0%, rgba(139, 92, 246, 0.14), transparent 34rem),
+    var(--bg-page);
+  letter-spacing: 0;
+}
+
+body,
+button,
+input,
+select,
+textarea {
+  font-family: 'Inter', system-ui, sans-serif;
+}
+
+h1, h2, h3,
+.page-title,
+.section-header {
+  font-family: 'Outfit', system-ui, sans-serif;
+  letter-spacing: 0;
+}
+
+.auth-shell {
+  background:
+    radial-gradient(circle at top left, rgba(20, 184, 166, 0.13), transparent 32rem),
+    radial-gradient(circle at bottom right, rgba(139, 92, 246, 0.15), transparent 32rem),
+    var(--bg-page) !important;
+}
+
+.auth-card,
+.q-card,
+.admin-stat-card {
+  border-radius: 14px;
+  background:
+    linear-gradient(180deg, rgba(255, 255, 255, 0.035), rgba(255, 255, 255, 0.012)),
+    var(--bg-card);
+  border: 1px solid var(--border);
+  box-shadow: var(--shadow-card);
+}
+
+.q-card:hover {
+  border-color: var(--border-2);
+  box-shadow: var(--shadow-card), 0 0 0 1px rgba(167, 139, 250, 0.08);
+}
+
+.q-surface,
+.q-input,
+select.q-input,
+textarea.q-input {
+  background: rgba(15, 23, 42, 0.58);
+  border: 1px solid var(--border);
+  color: var(--text-1);
+  border-radius: 12px;
+}
+
+.q-input,
+select.q-input,
+textarea.q-input {
+  min-height: 42px;
+  padding: 11px 14px;
+  font-size: 14px;
+}
+
+.q-input::placeholder,
+textarea.q-input::placeholder {
+  color: rgba(148, 163, 184, 0.62);
+}
+
+.q-input:focus,
+select.q-input:focus,
+textarea.q-input:focus {
+  outline: none;
+  border-color: var(--violet-border);
+  box-shadow: 0 0 0 4px rgba(139, 92, 246, 0.14);
+}
+
+.q-label {
+  display: block;
+  margin-bottom: 7px;
+  color: var(--text-2);
+  font-size: 12px;
+  font-weight: 700;
+  letter-spacing: 0;
+}
+
+.q-btn-primary,
+.q-btn-ghost,
+.q-btn-danger,
+.q-btn-pink {
+  min-height: 40px;
+  border-radius: 12px;
+  font-family: 'Inter', system-ui, sans-serif;
+  font-weight: 700;
+  letter-spacing: 0;
+}
+
+.q-btn-primary {
+  background: linear-gradient(135deg, #14b8a6, #6366f1 52%, #8b5cf6);
+  color: #fff;
+  box-shadow: var(--shadow-btn);
+}
+
+.q-btn-ghost {
+  background: rgba(15, 23, 42, 0.52);
+  color: var(--text-2);
+  border: 1px solid var(--border);
+}
+
+.q-btn-ghost:hover {
+  background: var(--violet-bg);
+  border-color: var(--violet-border);
+  color: var(--violet-lighter);
+}
+
+.q-btn-danger {
+  background: var(--red-bg);
+  color: var(--red);
+  border: 1px solid rgba(251, 113, 133, 0.28);
+}
+
+.q-badge {
+  min-height: 22px;
+  padding: 4px 9px;
+  font-size: 10px;
+  letter-spacing: 0.04em;
+}
+
+main {
+  min-width: 0;
+}
+
+main > div,
+.lg-sidebar-offset {
+  min-width: 0;
+}
+
+main table {
+  width: 100%;
+  border-collapse: separate;
+  border-spacing: 0;
+}
+
+main th {
+  color: var(--text-3);
+  font-size: 11px;
+  font-weight: 800;
+  letter-spacing: 0.05em;
+  text-transform: uppercase;
+}
+
+main td {
+  color: var(--text-2);
+}
+
+main tr {
+  transition: background 0.15s ease;
+}
+
+main tbody tr:hover {
+  background: rgba(255, 255, 255, 0.025);
+}
+
+.scrollbar-none,
+.scrollbar-hide {
+  scrollbar-width: none;
+}
+
+.scrollbar-none::-webkit-scrollbar,
+.scrollbar-hide::-webkit-scrollbar {
+  display: none;
+}
+
+@media (max-width: 767px) {
+  main {
+    padding-bottom: calc(64px + env(safe-area-inset-bottom));
+  }
+
+  .q-card {
+    border-radius: 12px;
+  }
+
+  .q-input,
+  select.q-input,
+  textarea.q-input,
+  .q-btn-primary,
+  .q-btn-ghost,
+  .q-btn-danger,
+  .q-btn-pink {
+    min-height: 44px;
+  }
+
+  .grid {
+    min-width: 0;
+  }
+
+  table {
+    min-width: 640px;
+  }
+}
+
+/* --------------------------------------------------------------------------
+   PRODUCT SYSTEM PRIMITIVES
+-------------------------------------------------------------------------- */
+.q-page,
+.q-public-page {
+  width: 100%;
+  min-height: calc(100vh - 48px);
+  padding: 18px;
+  color: var(--text-1);
+}
+
+.q-page--dashboard {
+  padding: 18px;
+}
+
+.q-page--queue {
+  padding: 14px;
+}
+
+.q-page-header {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 16px;
+  margin-bottom: 16px;
+}
+
+.q-page-title {
+  margin: 0;
+  font-size: clamp(22px, 2vw, 30px);
+  line-height: 1.08;
+  font-weight: 760;
+  color: var(--text-1);
+}
+
+.q-page-description {
+  margin-top: 4px;
+  max-width: 720px;
+  font-size: 13px;
+  line-height: 1.55;
+  color: var(--text-3);
+}
+
+.q-eyebrow {
+  margin-bottom: 6px;
+  font-size: 10px;
+  font-weight: 800;
+  color: var(--violet-light);
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+}
+
+.q-page-actions {
+  display: flex;
+  align-items: center;
+  justify-content: flex-end;
+  gap: 8px;
+  flex-wrap: wrap;
+}
+
+.q-system-card {
+  background:
+    linear-gradient(180deg, rgba(255,255,255,0.035), rgba(255,255,255,0.01)),
+    rgba(25, 30, 51, 0.92);
+  border: 1px solid var(--border);
+  border-radius: 14px;
+  box-shadow: 0 18px 50px rgba(0, 0, 0, 0.18);
+  transition: border-color 0.16s ease, transform 0.16s ease, box-shadow 0.16s ease, background 0.16s ease;
+}
+
+.q-system-card:hover {
+  border-color: rgba(167, 139, 250, 0.28);
+}
+
+.q-stat-card {
+  padding: 14px;
+  min-height: 104px;
+}
+
+.q-stat-top {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 10px;
+  margin-bottom: 10px;
+}
+
+.q-stat-label {
+  font-size: 10px;
+  font-weight: 800;
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+  color: var(--text-3);
+}
+
+.q-stat-icon {
+  width: 30px;
+  height: 30px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  border-radius: 10px;
+  background: rgba(139, 92, 246, 0.13);
+  color: var(--violet-light);
+}
+
+.q-stat-value {
+  font-family: 'Outfit', system-ui, sans-serif;
+  font-size: 26px;
+  line-height: 1;
+  font-weight: 760;
+  color: var(--text-1);
+  font-variant-numeric: tabular-nums;
+}
+
+.q-stat-meta {
+  margin-top: 7px;
+  font-size: 12px;
+  color: var(--text-3);
+}
+
+.q-status-chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 7px;
+  min-height: 24px;
+  padding: 4px 9px;
+  border-radius: 999px;
+  border: 1px solid var(--border);
+  background: rgba(15, 23, 42, 0.48);
+  color: var(--text-2);
+  font-size: 11px;
+  font-weight: 750;
+  white-space: nowrap;
+}
+
+.q-chip-pulse {
+  width: 7px;
+  height: 7px;
+  border-radius: 50%;
+  background: currentColor;
+  animation: qPulse 1.6s infinite;
+}
+
+.q-tone-brand,
+.q-tone-default {
+  --tone: var(--violet-light);
+  --tone-bg: var(--violet-bg);
+  --tone-border: var(--violet-border);
+}
+
+.q-tone-success {
+  --tone: var(--green);
+  --tone-bg: var(--green-bg);
+  --tone-border: var(--green-border);
+}
+
+.q-tone-warning {
+  --tone: var(--yellow);
+  --tone-bg: rgba(251, 191, 36, 0.11);
+  --tone-border: rgba(251, 191, 36, 0.24);
+}
+
+.q-tone-danger {
+  --tone: var(--red);
+  --tone-bg: var(--red-bg);
+  --tone-border: rgba(251, 113, 133, 0.28);
+}
+
+.q-tone-info {
+  --tone: var(--blue);
+  --tone-bg: var(--blue-bg);
+  --tone-border: rgba(96, 165, 250, 0.24);
+}
+
+.q-status-chip.q-tone-brand,
+.q-status-chip.q-tone-success,
+.q-status-chip.q-tone-warning,
+.q-status-chip.q-tone-danger,
+.q-status-chip.q-tone-info {
+  color: var(--tone);
+  background: var(--tone-bg);
+  border-color: var(--tone-border);
+}
+
+.q-stat-card.q-tone-success .q-stat-icon,
+.q-stat-card.q-tone-warning .q-stat-icon,
+.q-stat-card.q-tone-danger .q-stat-icon,
+.q-stat-card.q-tone-info .q-stat-icon {
+  color: var(--tone);
+  background: var(--tone-bg);
+}
+
+.q-filter-bar {
+  display: grid;
+  grid-template-columns: minmax(220px, 1fr) auto;
+  gap: 10px;
+  align-items: center;
+  padding: 12px;
+  border: 1px solid var(--border);
+  border-radius: 14px;
+  background: rgba(15, 23, 42, 0.42);
+}
+
+.q-empty-state {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  min-height: 180px;
+  padding: 28px 18px;
+  text-align: center;
+  color: var(--text-3);
+}
+
+.q-empty-icon {
+  width: 52px;
+  height: 52px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  border-radius: 16px;
+  margin-bottom: 12px;
+  color: var(--violet-light);
+  background: var(--violet-bg);
+  border: 1px solid var(--violet-border);
+}
+
+.q-empty-state h3 {
+  margin: 0;
+  color: var(--text-1);
+  font-size: 16px;
+  font-weight: 750;
+}
+
+.q-empty-state p {
+  max-width: 420px;
+  margin: 6px 0 0;
+  font-size: 13px;
+  line-height: 1.55;
+}
+
+.q-modal-frame {
+  width: 100%;
+  max-width: 520px;
+  max-height: min(86vh, 720px);
+  overflow: hidden;
+  border-radius: 18px;
+  background: var(--bg-card);
+  border: 1px solid var(--border);
+  box-shadow: 0 28px 90px rgba(0, 0, 0, 0.54);
+}
+
+/* Auth shell */
+.auth-card {
+  position: relative;
+  overflow: hidden;
+}
+
+.auth-card::before {
+  content: "";
+  position: absolute;
+  inset: 0 0 auto;
+  height: 1px;
+  background: linear-gradient(90deg, transparent, rgba(167,139,250,0.7), transparent);
+  pointer-events: none;
+}
+
+/* Queue operating system */
+.queue-shell {
+  width: 100%;
+  min-height: calc(100vh - 48px);
+  padding: 14px;
+}
+
+.queue-grid {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr);
+  gap: 14px;
+  align-items: start;
+}
+
+.queue-running-column,
+.queue-side-column {
+  min-width: 0;
+}
+
+.queue-running-card {
+  border-radius: 16px !important;
+  background:
+    linear-gradient(180deg, rgba(52,211,153,0.045), transparent 44%),
+    var(--bg-card) !important;
+}
+
+.queue-upcoming-card {
+  position: sticky;
+  top: 62px;
+  max-height: calc(100vh - 86px);
+}
+
+.queue-compact-list {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+/* Booking flow */
+.booking-flow-shell {
+  min-height: 100vh;
+  background:
+    radial-gradient(circle at 0% 0%, rgba(20,184,166,0.09), transparent 28rem),
+    var(--bg-page);
+}
+
+.booking-topbar {
+  position: sticky;
+  top: 0;
+  z-index: 20;
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  min-height: 60px;
+  padding: 10px 14px;
+  background: rgba(10, 13, 27, 0.9);
+  border-bottom: 1px solid var(--border);
+  backdrop-filter: blur(16px);
+}
+
+.booking-panel {
+  width: 100%;
+  min-height: calc(100vh - 60px);
+}
+
+.booking-main {
+  width: min(100%, 1120px);
+  margin: 0 auto;
+  padding: 18px 14px 112px;
+}
+
+.booking-stepper {
+  height: auto;
+  max-height: 72px;
+  margin-bottom: 16px !important;
+}
+
+@media (min-width: 768px) {
+  .q-page,
+  .q-public-page,
+  .q-page--dashboard {
+    padding: 22px;
+  }
+
+  .q-page--queue,
+  .queue-shell {
+    padding: 18px;
+  }
+
+  .queue-grid {
+    grid-template-columns: minmax(0, 1fr);
+  }
+
+  .booking-main {
+    padding: 22px 22px 112px;
+  }
+}
+
+@media (min-width: 1180px) {
+  .q-page,
+  .q-page--dashboard {
+    padding: 24px 28px;
+  }
+
+  .queue-grid {
+    grid-template-columns: minmax(0, 7fr) minmax(300px, 3fr);
+  }
+}
+
+@media (max-width: 767px) {
+  .q-page-header {
+    flex-direction: column;
+    align-items: stretch;
+    gap: 10px;
+  }
+
+  .q-page-actions {
+    justify-content: flex-start;
+  }
+
+  .q-filter-bar {
+    grid-template-columns: 1fr;
+  }
+
+  .q-stat-card {
+    min-height: 94px;
+    padding: 12px;
+  }
+
+  .q-stat-value {
+    font-size: 23px;
+  }
+}
+
+@keyframes qPulse {
+  0%, 100% { opacity: 1; transform: scale(1); }
+  50% { opacity: 0.45; transform: scale(1.35); }
+}
+
