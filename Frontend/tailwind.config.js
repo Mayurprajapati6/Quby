@@ -16,17 +16,6 @@ export default {
           text3:   '#383958',
           text4:   '#2a2b42',
         },
-        /* Light theme surfaces */
-        light: {
-          page:  '#dce8f8',
-          surf:  '#eef5ff',
-          card:  '#ffffff',
-          border: 'rgba(59,127,255,0.1)',
-          text1: '#0a1a4e',
-          text2: 'rgba(10,26,78,0.55)',
-          text3: 'rgba(10,26,78,0.35)',
-          text4: 'rgba(10,26,78,0.18)',
-        },
         /* Brand colors */
         violet: {
           DEFAULT:  '#7c3aed',
