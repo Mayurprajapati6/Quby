@@ -1,5 +1,7 @@
 export interface AppError extends Error {
   statusCode: number;
+  reason?: string;
+  code?: string;
 }
 
 export class InternalServerError extends Error implements AppError {
@@ -13,9 +15,15 @@ export class InternalServerError extends Error implements AppError {
 
 export class BadRequestError extends Error implements AppError {
   statusCode = 400;
-  constructor(message: string) {
+  reason?: string;
+  code?: string;
+
+  constructor(message: string, meta?: { reason?: string; code?: string }) {
     super(message);
     this.name = "BadRequestError";
+    this.reason = meta?.reason;
+    this.code = meta?.code;
+
     Object.setPrototypeOf(this, BadRequestError.prototype);
   }
 }

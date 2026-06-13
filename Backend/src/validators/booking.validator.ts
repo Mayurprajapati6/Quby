@@ -47,7 +47,15 @@ export const cancelBookingSchema = z.object({
 });
 
 export const myBookingsQuerySchema = z.object({
-  tab:   z.enum(["today", "upcoming", "completed", "cancelled", "no_show"]).default("upcoming"),
+  tab: z.enum([
+    "today",
+    "upcoming",
+    "completed",
+    "cancelled",
+    "no_show",
+    "refund"  
+  ]).default("upcoming"),
+
   page:  z.coerce.number().int().min(1).default(1),
   limit: z.coerce.number().int().min(1).max(50).default(10),
 });

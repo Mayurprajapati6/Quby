@@ -43,6 +43,7 @@ function verify(token: string, secret: string): JwtPayload {
       userId:     payload.userId,
       role:       payload.role,
       version:    payload.version,
+      entityId:   payload.entityId,
       ...(payload.businessId && { businessId: payload.businessId }),
     };
   } catch (err) {
