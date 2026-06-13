@@ -38,7 +38,8 @@ function AuthInit() {
       return
     }
 
-    const baseUrl = (import.meta.env.VITE_API_URL || 'http://localhost:3004') + '/api/v1'
+    const baseUrl =
+  import.meta.env.VITE_API_BASE_URL || 'http://localhost:3004/api/v1'
 
     fetch(`${baseUrl}/auth/refresh`, {
       method: 'POST',
