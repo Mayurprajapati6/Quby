@@ -21,9 +21,15 @@ async function fetchAvatar(userId: string, role: string): Promise<string> {
 }
 
 function fireTrack(payload: Record<string, unknown>): void {
-  axios.post(`${REQTROL_URL}/api/v1/track`, payload, { timeout: 1000 })
-    .catch((err: Error) => logger.warn(`[Reqtrol] Track push failed: ${err.message}`));
+  console.log(`[Reqtrol] Firing track for endpoint=${payload.endpoint}, userId=${payload.userId}`);
+  axios.post(`${REQTROL_URL}/api/v1/track`, payload, { timeout: 2000 })  // Increase timeout to 2s
+    .then(() => console.log(`[Reqtrol] Track success for ${payload.endpoint}`))
+    .catch((err: Error) => {
+      console.error(`[Reqtrol] Track push failed for ${payload.endpoint}:`, err.message);
+      logger.warn(`[Reqtrol] Track push failed: ${err.message}`);
+    });
 }
+
 
 
 export async function reqtrolMiddleware(
