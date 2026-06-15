@@ -9,7 +9,9 @@ function createRedisClient(name: string): IORedis {
     enableReadyCheck: false,
     lazyConnect: true,
     connectTimeout: 10000,  // 10 second connection timeout
-    db: 1,  // Use database 1 (Reqtrol uses 0)
+    // ✅ Removed db: 1 — Upstash free tier only supports db: 0
+    // Use key prefixes instead: "quby:*" for Quby, "reqtrol:*" for Reqtrol
+    keyPrefix: "quby:",  // All keys will be prefixed with "quby:"
     retryStrategy(times: number) {
       if (times > 10) {
         logger.error(`[Redis:${name}] Max retries reached — giving up`);
@@ -32,7 +34,8 @@ function createRedisClient(name: string): IORedis {
         host: serverConfig.REDIS_HOST ?? "127.0.0.1",
         port: Number(serverConfig.REDIS_PORT ?? 6379),
         password: serverConfig.REDIS_PASSWORD || undefined,
-        db: Number(serverConfig.REDIS_DB ?? 0),
+        // ✅ Always use db: 0 (Upstash free tier requirement)
+        db: 0,
         ...commonOptions,
       });
 
