@@ -8,6 +8,7 @@ function createRedisClient(name: string): IORedis {
     maxRetriesPerRequest: null,
     enableReadyCheck: false,
     lazyConnect: true,
+    connectTimeout: 10000,  // 10 second connection timeout
     retryStrategy(times: number) {
       if (times > 10) {
         logger.error(`[Redis:${name}] Max retries reached — giving up`);

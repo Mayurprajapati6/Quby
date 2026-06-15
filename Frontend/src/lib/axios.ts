@@ -8,7 +8,7 @@ const BASE_URL =
 export const api = axios.create({
   baseURL: BASE_URL,
   headers: { 'Content-Type': 'application/json' },
-  timeout: 30_000,
+  timeout: 60_000, // Increased to 60 seconds for Render cold starts
 })
 
 // ── In-memory token store (never written to localStorage) ─────────

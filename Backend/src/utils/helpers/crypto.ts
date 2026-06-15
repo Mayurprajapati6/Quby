@@ -1,7 +1,10 @@
 import bcrypt from "bcryptjs";
 import crypto from "crypto";
 
-const SALT_ROUNDS = 12;
+// Reduced from 12 to 10 for production performance on Render free tier
+// 10 rounds = ~100-150ms (vs 12 rounds = 300-500ms on weak CPUs)
+// Still secure: 2^10 = 1024 iterations, sufficient for passwords
+const SALT_ROUNDS = 10;
 
 export async function hashPassword(plaintext: string): Promise<string> {
   return bcrypt.hash(plaintext, SALT_ROUNDS);
