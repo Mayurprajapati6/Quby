@@ -83,27 +83,4 @@ cron.schedule("0 * * * *", async () => {
   }
 });
 
-// ═══════════════════════════════════════════════════════════════════════════
-// 🧹 CLEANUP OLD REFRESH TOKENS (Every 6 hours)
-// Problem: Refresh tokens accumulate forever in DB, slowing down queries
-// Solution: Delete tokens older than 8 days (1 day past 7-day expiry)
-// ═══════════════════════════════════════════════════════════════════════════
-cron.schedule("0 */6 * * *", async () => {
-  try {
-    const eightDaysAgo = new Date(Date.now() - 8 * 24 * 60 * 60 * 1000);
-    
-    const result = await prisma.refreshToken.deleteMany({
-      where: {
-        created_at: { lt: eightDaysAgo }
-      }
-    });
-    
-    if (result.count > 0) {
-      logger.info(`[Cron] Deleted ${result.count} old refresh tokens (older than 8 days)`);
-    }
-  } catch (err) {
-    logger.error("[Cron] Refresh token cleanup failed:", err);
-  }
-});
-
 logger.info("[Cron] All jobs scheduled");
