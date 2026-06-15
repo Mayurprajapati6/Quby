@@ -206,6 +206,7 @@ model RefreshToken {
   @@index([user_id])
   @@index([token])
   @@index([expires_at])
+  @@index([created_at])  // For cleanup cron job
   @@map("refresh_tokens")
 }
 

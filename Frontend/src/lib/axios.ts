@@ -64,13 +64,15 @@ api.interceptors.response.use(
   async (error) => {
     const originalRequest = error.config as AxiosRequestConfig & { _retry?: boolean }
 
+    // 🚨 CRITICAL: Check if this is an auth endpoint FIRST to prevent infinite refresh loops
+    // If /auth/refresh itself returns 401, we must NOT try to refresh again (infinite loop)
+    const url = (originalRequest.url ?? '')
+    const isAuthEndpoint = url.includes('/auth/login') || url.includes('/auth/register') || url.includes('/auth/refresh')
+    if (isAuthEndpoint) {
+      return Promise.reject(error)
+    }
+
     if (error.response?.status === 401 && !originalRequest._retry) {
-      // Never try to refresh on auth endpoints themselves — just pass error to component
-      const url = (originalRequest.url ?? '')
-      const isAuthEndpoint = url.includes('/auth/login') || url.includes('/auth/register') || url.includes('/auth/refresh')
-      if (isAuthEndpoint) {
-        return Promise.reject(error)
-      }
 
       if (isRefreshing) {
         return new Promise((resolve, reject) => {
