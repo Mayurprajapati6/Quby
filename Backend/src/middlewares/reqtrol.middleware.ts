@@ -88,7 +88,7 @@ export function reqtrolRateLimiter(
 ): RequestHandler {
   return async function (req: Request, res: Response, next: NextFunction): Promise<void> {
     if (res.locals.reqtrolTracked) return limiter(req, res, next);
-
+    
     const start     = Date.now();
     const requestId = randomUUID();
     const endpoint  = req.path;
@@ -97,7 +97,7 @@ export function reqtrolRateLimiter(
     const userAgent = req.headers['user-agent'] ?? 'unknown';
     const action    = endpoint.split('/').filter(Boolean)[0] ?? 'unknown';
     const source    = req.headers['x-reqtrol-simulator'] === 'true' ? 'simulator' : 'quby';
-
+    
     const authUser    = (req as AuthRequest).user;
     const isAuthed    = !!authUser?.userId;
     let userId        = isAuthed ? authUser!.userId : 'anon';
@@ -105,84 +105,76 @@ export function reqtrolRateLimiter(
     let avatarUrl     = '';
 
     if (isAuthed) {
-     
       try {
         const sel = { name: true, avatar_url: true } as const;
         let row: { name: string; avatar_url: string | null } | null = null;
         const role = authUser!.role;
+        
         if      (role === 'CUSTOMER') row = await prisma.customer.findUnique({ where: { user_id: userId }, select: sel });
         else if (role === 'OWNER')    row = await prisma.owner.findUnique(   { where: { user_id: userId }, select: sel });
         else if (role === 'STAFF')    row = await prisma.staff.findUnique(   { where: { user_id: userId }, select: sel });
         else if (role === 'ADMIN')    row = await prisma.admin.findUnique(   { where: { user_id: userId }, select: sel });
+        
         userName  = row?.name       ?? '';
         avatarUrl = row?.avatar_url ?? '';
       } catch { /* keep empty strings */ }
     }
 
-    let blocked = false;
-    const origStatus = res.status.bind(res);
-    (res as any).status = (code: number) => { if (code === 429) blocked = true; return origStatus(code); };
-
-    const origJson = res.json.bind(res);
-    (res as any).json = (body: unknown) => {
-      (res as any).json   = origJson;
-      (res as any).status = origStatus;
-
-      if (!res.locals.reqtrolTracked) {
-        res.locals.reqtrolTracked = true;
-        const ms = Date.now() - start;
-
-        const ctrlUser = res.locals.reqtrolUser as { userId: string; userName: string; avatarUrl: string } | undefined;
-        const finalUserId    = ctrlUser?.userId    ?? userId;
-        const finalUserName  = ctrlUser?.userName  ?? userName;
-        const finalAvatarUrl = ctrlUser?.avatarUrl ?? avatarUrl;
-
-        fireTrack({
-          requestId,
-          userId:    finalUserId,
-          userName:  finalUserName,
-          avatarUrl: finalAvatarUrl,
-          endpoint, action, method, ip, userAgent,
-          allowed:   !blocked,
-          reason:    blocked ? 'rate_limit_exceeded' : null,
-          limit:     parseInt(String(res.getHeader('RateLimit-Limit')     ?? '0'),  10),
-          remaining: parseInt(String(res.getHeader('RateLimit-Remaining') ?? '0'),  10),
-          resetIn:   parseInt(String(res.getHeader('RateLimit-Reset')     ?? '60'), 10),
-          service: 'quby', source, algorithm: 'fixed-window',
-          limiterName, statusCode: blocked ? 429 : 200,
-          responseTimeMs: ms, timestamp: Date.now(),
-        });
-      }
-
-      return origJson(body);
-    };
-
-    const wrappedNext: NextFunction = (err?: any) => {
-      (res as any).status = origStatus;
-
-      if (isAuthed && !res.locals.reqtrolTracked) {
-        res.locals.reqtrolTracked = true;
-        (res as any).json = origJson; 
-        fireTrack({
+    // CRITICAL FIX: Call /check-limit FIRST, before local limiter
+    try {
+      const { data } = await axios.post(
+        `${REQTROL_URL}/api/v1/check-limit`,
+        {
           requestId, userId, userName, avatarUrl,
           endpoint, action, method, ip, userAgent,
-          allowed: true, reason: null,
-          limit: 0, remaining: 0, resetIn: 0,
-          service: 'quby', source, algorithm: 'fixed-window',
-          limiterName, statusCode: 200,
-          responseTimeMs: Date.now() - start, timestamp: Date.now(),
-        });
-      }
-      
-      next(err);
-    };
+          timestamp: Date.now(),
+          service: 'quby',
+          source,
+        },
+        { timeout: TIMEOUT_MS }
+      );
 
-    try {
-      limiter(req, res, wrappedNext);
+      const responseTimeMs = Date.now() - start;
+
+      // Track the result
+      fireTrack({
+        requestId, userId, userName, avatarUrl,
+        endpoint, action, method, ip, userAgent,
+        allowed:        data.allowed ?? true,
+        reason:         data.reason  ?? null,
+        limit:          data.limit   ?? 0,
+        remaining:      data.remaining ?? 0,
+        resetIn:        data.resetIn ?? 0,
+        service: 'quby',
+        source,
+        algorithm:      data.algorithm ?? 'fixed-window',
+        limiterName:    data.limiterName ?? limiterName,
+        statusCode:     data.allowed ? 200 : 429,
+        responseTimeMs,
+        timestamp: Date.now(),
+      });
+
+      res.locals.reqtrolTracked = true;
+
+      // If Reqtrol blocked, return 429 immediately
+      if (!data.allowed) {
+        res.status(429).json({
+          success: false,
+          message: 'Rate limit exceeded.',
+          retryAfter: data.resetIn ?? 60,
+          requestId
+        });
+        return;
+      }
+
+      // Otherwise, continue to local limiter (for backward compatibility)
+      next();
+      
     } catch (err) {
-      (res as any).status = origStatus;
-      (res as any).json   = origJson;
-      next(err);
+      // If Reqtrol is down, fail open and continue
+      logger.warn(`[Reqtrol] Unreachable for ${endpoint} — failing open`);
+      res.locals.reqtrolTracked = true;
+      next();
     }
   };
 }
