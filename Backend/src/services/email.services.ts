@@ -46,7 +46,9 @@ function getTransporter(): Transporter {
   _transporter = nodemailer.createTransport({
     host:   "smtp.gmail.com",
     port:   587,
-    secure: false,      
+    secure: false,
+    // ✅ FIX: Force IPv4 to avoid IPv6 ENETUNREACH errors on some hosts
+    family: 4,
     auth: {
       user: serverConfig.MAIL_USER,
       pass: serverConfig.MAIL_PASS,
