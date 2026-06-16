@@ -487,7 +487,7 @@ export class QueueRecalculationService {
 
     await prisma.booking.update({
       where: { id: bookingId },
-      data:  { status: "COMPLETED", completed_at: new Date() },
+      data:  { status: "COMPLETED", service_completed_at: new Date() },
     });
 
     logger.info(`[handleComplete] ${bookingId} → COMPLETED`);

@@ -19,7 +19,11 @@ export const emailWorker = new Worker(
 );
 
 emailWorker.on("failed", async (job, err) => {
-  logger.error(`[EmailWorker] Job ${job?.id} failed:`, err.message);
+  logger.error(`[EmailWorker] Job ${job?.id} failed: ${err.message}`, {
+    type: job?.data?.type,
+    to: job?.data?.to,
+    stack: err.stack,
+  });
   if (job && job.attemptsMade >= (job.opts.attempts ?? 3)) {
     await dlqQueue.add("email-dlq", { originalJob: job.data, error: err.message });
   }

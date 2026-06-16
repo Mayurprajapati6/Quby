@@ -271,6 +271,11 @@ export class StaffBookingActionsService {
       status:             "RUNNING",
       service_started_at: now.toISOString(),
     });
+    emitToUser(booking.customer.user.id, "service:started", {
+      bookingId,
+      status:             "RUNNING",
+      service_started_at: now.toISOString(),
+    });
 
     emitToBusiness(staff.business_id, "queue:updated", { staffId: staff.id });
 

@@ -789,6 +789,16 @@ async function handleRefundInitiated(bookingId: string): Promise<void> {
     type: "REFUND_INITIATED", title: "Refund Initiated",
     message: `Refund for your appointment at ${booking.business.business_name} has been initiated.`,
   });
+  emitToUser(booking.customer.user.id, "refund:initiated", {
+    bookingId,
+    status: "REFUND_INITIATED",
+    businessName: booking.business.business_name,
+  });
+  emitToBusiness(booking.business_id, "refund:initiated", {
+    bookingId,
+    status: "REFUND_INITIATED",
+    customerName: booking.customer.name,
+  });
   logger.info(`[NotificationWorker] REFUND_INITIATED ✅ ${bookingId}`);
 }
 
@@ -820,6 +830,16 @@ async function handleRefundCompleted(bookingId: string): Promise<void> {
   emitToUser(booking.customer.user.id, "notification:new", {
     type: "REFUND_COMPLETED", title: "Refund Successful",
     message: `${amount} refund for your appointment at ${booking.business.business_name} has been credited.`,
+  });
+  emitToUser(booking.customer.user.id, "refund:completed", {
+    bookingId,
+    status: "REFUNDED",
+    businessName: booking.business.business_name,
+  });
+  emitToBusiness(booking.business_id, "refund:completed", {
+    bookingId,
+    status: "REFUNDED",
+    customerName: booking.customer.name,
   });
   logger.info(`[NotificationWorker] REFUND_COMPLETED ✅ ${bookingId}`);
 }

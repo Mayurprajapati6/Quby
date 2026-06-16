@@ -63,7 +63,6 @@ async function handleBookingCompleted(bookingId: string) {
     data:  {
       completed_bookings: { increment: 1 },
       total_spent:        { increment: booking.service_amount },
-      last_booking_date:  new Date(),
     },
   }).catch(() => {});
 }

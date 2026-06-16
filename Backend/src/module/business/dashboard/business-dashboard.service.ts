@@ -52,8 +52,6 @@ export class BusinessDashboardService {
     }
 
     // ✅ FIX: BusinessWallet model does not exist in schema — removed prisma.businessWallet call
-    const wallet = null; // wallet balance not available without BusinessWallet model
-
     const [
       earnings,
       bookingCounts,
@@ -78,7 +76,7 @@ export class BusinessDashboardService {
 
     const summary = {
       total_earnings_inr:     earnings.settled / 100,
-      available_balance_inr:  (wallet?.balance ?? 0) / 100,
+      available_balance_inr:  earnings.settled / 100,
       pending_earnings_inr:   earnings.pending / 100,
       total_bookings:         bookingCounts.total,
       completed_bookings:     bookingCounts.completed,

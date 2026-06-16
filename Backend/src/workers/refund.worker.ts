@@ -4,7 +4,7 @@ import { QUEUE_NAMES, notificationQueue } from "../config/bullmq";
 import { prisma } from "../config/prisma";
 import { razorpay } from "../config/razorpay";
 import logger from "../config/logger.config";
-import { emitToUser } from "../socket/socket.service";
+import { emitToBusiness, emitToUser } from "../socket/socket.service";
 import { queueEmail } from "../services/email.services";
 
 interface RefundJobData {
@@ -30,6 +30,7 @@ export const refundWorker = new Worker<RefundJobData>(
       select: {
         id:                  true,
         amount:              true,
+        business_id:         true,
         refund_id:           true,
         refund_status:       true,
         refund_amount:       true,
@@ -95,6 +96,7 @@ export const refundWorker = new Worker<RefundJobData>(
             }),
           ]);
           logger.info(`[RefundWorker] Payment ${razorpayPaymentId} already fully refunded`);
+          emitToBusiness(payment.business_id, "refund:completed", { bookingId });
           return { status: "already_refunded" };
         }
 
@@ -261,12 +263,22 @@ const bookingWithCustomer = await prisma.booking.findUnique({
   where: { id: payment.booking_id },
   select: { customer: { select: { user: { select: { id: true } } } } },
 });
-if (bookingWithCustomer?.customer?.user?.id) {
-  emitToUser(bookingWithCustomer.customer.user.id, 'booking:updated', {
+  if (bookingWithCustomer?.customer?.user?.id) {
+  const payload = {
     bookingId: payment.booking_id,
     status: 'REFUNDED',
+  };
+  emitToUser(bookingWithCustomer.customer.user.id, 'booking:updated', payload);
+  emitToUser(bookingWithCustomer.customer.user.id, 'refund:completed', {
+    ...payload,
+    refundAmount: refundAmount ?? payment.refund_amount ?? payment.amount,
   });
 }
+emitToBusiness(payment.business_id, 'refund:completed', {
+  bookingId: payment.booking_id,
+  status: 'REFUNDED',
+  refundAmount: refundAmount ?? payment.refund_amount ?? payment.amount,
+});
 }
 
 export async function handleRefundWebhookCreated(
@@ -301,4 +313,20 @@ export async function handleRefundWebhookCreated(
       },
     }),
   ]);
+
+  const bookingWithCustomer = await prisma.booking.findUnique({
+    where: { id: payment.booking_id },
+    select: { customer: { select: { user: { select: { id: true } } } } },
+  });
+
+  const payload = {
+    bookingId: payment.booking_id,
+    status: "REFUND_INITIATED",
+    refundAmount: refundAmount ?? payment.refund_amount ?? payment.amount,
+  };
+  if (bookingWithCustomer?.customer?.user?.id) {
+    emitToUser(bookingWithCustomer.customer.user.id, "booking:updated", payload);
+    emitToUser(bookingWithCustomer.customer.user.id, "refund:initiated", payload);
+  }
+  emitToBusiness(payment.business_id, "refund:initiated", payload);
 }

@@ -8,7 +8,15 @@ import logger from "../config/logger.config";
 import type { EmailJobType } from "../config/bullmq";
 
 const templateCache = new Map<string, HandlebarsTemplateDelegate>();
-const TEMPLATES_DIR = path.join(process.cwd(), "src", "templates", "emails");
+function resolveTemplatesDir(): string {
+  const candidates = [
+    path.join(process.cwd(), "src", "templates", "emails"),
+    path.join(process.cwd(), "Backend", "src", "templates", "emails"),
+  ];
+  const found = candidates.find((dir) => fs.existsSync(dir));
+  return found ?? candidates[0];
+}
+const TEMPLATES_DIR = resolveTemplatesDir();
 
 function getTemplate(name: string): HandlebarsTemplateDelegate {
   if (templateCache.has(name)) return templateCache.get(name)!;
@@ -32,6 +40,9 @@ let _transporter: Transporter | null = null;
 
 function getTransporter(): Transporter {
   if (_transporter) return _transporter;
+  if (!serverConfig.MAIL_USER || !serverConfig.MAIL_PASS) {
+    throw new Error("Missing MAIL_USER or MAIL_PASS environment variable for SMTP email delivery.");
+  }
   _transporter = nodemailer.createTransport({
     host:   "smtp.gmail.com",
     port:   587,

@@ -177,7 +177,7 @@ export class BusinessRepository {
     return prisma.booking.count({
       where: {
         business_id: businessId,
-        status:      { in: ["CONFIRMED", "CHECKED_IN", "RUNNING"] },
+        status:      { in: ["CONFIRMED", "RUNNING"] },
       },
     });
   }

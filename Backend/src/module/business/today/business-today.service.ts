@@ -48,7 +48,7 @@ export class BusinessTodayService {
 
     const busyStaffIds = new Set(
       bookings
-        .filter(b => b.status === "CHECKED_IN" || b.status === "RUNNING")
+        .filter(b => b.status === "RUNNING")
         .map(b => b.staff_id),
     );
 

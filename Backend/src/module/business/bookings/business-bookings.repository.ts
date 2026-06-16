@@ -37,7 +37,7 @@ export class BusinessBookingsRepository {
         break;
       case "running":
         // Updated: RUNNING replaces IN_PROGRESS/CHECKED_IN dual state
-        dateOrStatusFilter = { status: { in: ["CHECKED_IN", "RUNNING"] } };
+        dateOrStatusFilter = { status: "RUNNING" };
         break;
     }
 

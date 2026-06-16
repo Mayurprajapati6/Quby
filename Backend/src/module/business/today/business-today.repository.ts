@@ -15,7 +15,7 @@ export class BusinessTodayRepository {
       where: {
         business_id:  businessId,
         service_date: today,
-        status:       { in: ["CHECKED_IN", "RUNNING", "CONFIRMED"] },
+        status:       { in: ["RUNNING", "CONFIRMED"] },
       },
       include: TODAY_BOOKING_INCLUDE,
       orderBy: [
@@ -80,7 +80,7 @@ export class BusinessTodayRepository {
         where: {
           business_id:  businessId,
           service_date: today,
-          status:       { in: ["CHECKED_IN", "RUNNING"] },
+          status:       "RUNNING",
         },
       }),
       prisma.booking.count({

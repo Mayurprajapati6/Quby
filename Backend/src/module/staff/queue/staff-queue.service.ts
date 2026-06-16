@@ -42,8 +42,14 @@ function toQueueItem(b: any) {
     service_completed_at: b.service_completed_at ? toIST(new Date(b.service_completed_at)) : null,
     estimated_duration:   b.estimated_duration,
     actual_duration:      b.actual_duration ?? null,
+    notes:                b.notes ?? null,
     services: Array.isArray(b.services)
-      ? b.services.map((s: any) => ({ name: s.name, duration: s.duration_minutes, image: s.image_url || null }))
+      ? b.services.map((s: any) => ({ 
+          name: s.name, 
+          duration: s.duration_minutes, 
+          image: s.image_url || null,
+          additional_note: s.additional_note || null 
+        }))
       : [],
     customer: {
       id:         b.customer.id,
@@ -108,6 +114,7 @@ export class StaffQueueService {
         service_start_time:   true,
         estimated_duration:   true,
         services:             true,
+        notes:                true,
         checked_in_at:        true,
         service_started_at:   true,
         service_completed_at: true,
@@ -147,6 +154,7 @@ export class StaffQueueService {
         service_start_time:   true,
         estimated_duration:   true,
         services:             true,
+        notes:                true,
         checked_in_at:        true,
         service_started_at:   true,
         service_completed_at: true,
