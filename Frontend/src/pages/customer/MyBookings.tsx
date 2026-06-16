@@ -976,8 +976,9 @@ export default function MyBookings() {
       return r.data
     },
     refetchOnMount: true,
-    refetchOnWindowFocus: false,
-    refetchInterval: false,
+    refetchOnWindowFocus: true,
+    // ✅ Auto-refetch every 30s on refund tab (to catch webhook updates)
+    refetchInterval: tab === 'refund' ? 30000 : false,
   })
 
   const rawBookings = data?.data?.bookings ?? []
