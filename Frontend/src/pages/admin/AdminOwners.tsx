@@ -784,7 +784,7 @@ export default function AdminOwners() {
   const pagination = data?.pagination ? normalizePagination(data.pagination) : null
 
   return (
-    <div className="min-h-screen pb-20 lg:pb-8 px-4 py-5 md:px-6 lg:px-8 max-w-4xl mx-auto space-y-4" style={{ background: 'var(--bg-page)' }}>
+    <div className="min-h-screen pb-20 lg:pb-8 px-4 py-5 md:px-6 lg:px-8 w-full space-y-4" style={{ background: 'var(--bg-page)' }}>
       <motion.div initial={{ opacity: 0, y: 8 }} animate={{ opacity: 1, y: 0 }}>
         <h1 className="font-syne font-black text-2xl lg:text-3xl" style={{ color: 'var(--text-1)' }}>Business Owners</h1>
         <p className="text-sm mt-0.5" style={{ color: 'var(--text-3)' }}>{pagination?.total ?? 0} owners registered</p>
@@ -887,7 +887,7 @@ export function AdminCustomers() {
   const pagination = data?.pagination ? normalizePagination(data.pagination) : null
 
   return (
-    <div className="min-h-screen pb-20 lg:pb-8 px-4 py-5 md:px-6 lg:px-8 max-w-4xl mx-auto space-y-4" style={{ background: 'var(--bg-page)' }}>
+    <div className="min-h-screen pb-20 lg:pb-8 px-4 py-5 md:px-6 lg:px-8 w-full space-y-4" style={{ background: 'var(--bg-page)' }}>
       <motion.div initial={{ opacity: 0, y: 8 }} animate={{ opacity: 1, y: 0 }}>
         <h1 className="font-syne font-black text-2xl lg:text-3xl" style={{ color: 'var(--text-1)' }}>Customers</h1>
         <p className="text-sm mt-0.5" style={{ color: 'var(--text-3)' }}>{pagination?.total ?? 0} customers registered</p>
@@ -1006,7 +1006,7 @@ export function AdminStaff() {
   const pagination = data?.pagination ? normalizePagination(data.pagination) : null
 
   return (
-    <div className="min-h-screen pb-20 lg:pb-8 px-4 py-5 md:px-6 lg:px-8 max-w-4xl mx-auto space-y-4" style={{ background: 'var(--bg-page)' }}>
+    <div className="min-h-screen pb-20 lg:pb-8 px-4 py-5 md:px-6 lg:px-8 w-full space-y-4" style={{ background: 'var(--bg-page)' }}>
       <motion.div initial={{ opacity: 0, y: 8 }} animate={{ opacity: 1, y: 0 }}>
         <h1 className="font-syne font-black text-2xl lg:text-3xl" style={{ color: 'var(--text-1)' }}>Staff</h1>
         <p className="text-sm mt-0.5" style={{ color: 'var(--text-3)' }}>{pagination?.total ?? 0} staff members</p>

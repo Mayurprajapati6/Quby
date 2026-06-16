@@ -264,35 +264,20 @@ export default function RegisterPage() {
               </div>
             )}
 
-            {/* State + City in 2-col row */}
-            <div className="grid grid-cols-2 gap-3">
-              <div>
-                <label className="text-[11px] font-syne font-bold uppercase tracking-wide block mb-2" style={{ color: 'var(--text-3)' }}>
-                  State
-                </label>
-                <StateCitySelect
-                  stateValue={state}
-                  cityValue={city}
-                  onStateChange={(v) => {
-                    setState(v)
-                    setValue('state', v)
-                  }}
-                  onCityChange={(v) => {
-                    setCity(v)
-                    setValue('city', v)
-                  }}
-                />
-              </div>
-              <div>
-                <label className="text-[11px] font-syne font-bold uppercase tracking-wide block mb-2" style={{ color: 'var(--text-3)' }}>
-                  City
-                </label>
-                <div className="w-full h-11 px-4 rounded-[9px] flex items-center" style={{ background: 'var(--bg-surface)', border: '1px solid var(--border)' }}>
-                  <span style={{ color: city ? 'var(--text-1)' : 'var(--text-3)' }}>
-                    {city || 'Select state first'}
-                  </span>
-                </div>
-              </div>
+            {/* State + City */}
+            <div>
+              <StateCitySelect
+                stateValue={state}
+                cityValue={city}
+                onStateChange={(v) => {
+                  setState(v)
+                  setValue('state', v)
+                }}
+                onCityChange={(v) => {
+                  setCity(v)
+                  setValue('city', v)
+                }}
+              />
             </div>
 
             <div>

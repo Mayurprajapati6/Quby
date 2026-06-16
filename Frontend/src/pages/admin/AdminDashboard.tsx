@@ -530,7 +530,7 @@ function CityBizChart({ items }: { items: TopBiz[] }) {
 /* ═══════════════════════ Skeleton ═══════════════════════ */
 function DashboardSkeleton() {
   return (
-    <div className="min-h-screen pb-20 lg:pb-8 px-4 py-5 md:px-6 lg:px-8 max-w-4xl mx-auto space-y-4" style={{ background: 'var(--bg-page)' }}>
+    <div className="min-h-screen pb-20 lg:pb-8 px-4 py-5 md:px-6 lg:px-8 w-full space-y-4" style={{ background: 'var(--bg-page)' }}>
       <div className="space-y-1.5">
         <Skeleton height="32px" width="200px" />
         <Skeleton height="14px" width="140px" />
@@ -599,7 +599,7 @@ export default function AdminDashboard() {
 
   if (dashError || !dashData || !anaData) {
     return (
-      <div className="min-h-screen pb-20 lg:pb-8 px-4 py-5 md:px-6 lg:px-8 max-w-4xl mx-auto" style={{ background: 'var(--bg-page)' }}>
+      <div className="min-h-screen pb-20 lg:pb-8 px-4 py-5 md:px-6 lg:px-8 w-full" style={{ background: 'var(--bg-page)' }}>
         <div className="q-card p-6 text-center">
           <p className="font-syne font-black text-base" style={{ color: 'var(--text-1)' }}>Dashboard unavailable</p>
           <p className="text-sm mt-1 mb-4" style={{ color: 'var(--text-3)' }}>Could not load platform data</p>
@@ -652,7 +652,7 @@ const topBizForCity: TopBiz[] = Array.isArray(topBizList)
   : [];
 
   return (
-    <div className="min-h-screen pb-20 lg:pb-8 px-4 py-5 md:px-6 lg:px-8 max-w-4xl mx-auto space-y-4" style={{ background: 'var(--bg-page)' }}>
+    <div className="min-h-screen pb-20 lg:pb-8 px-4 py-5 md:px-6 lg:px-8 w-full space-y-4" style={{ background: 'var(--bg-page)' }}>
 
       {/* Header */}
       <motion.div initial={{ opacity: 0, y: 8 }} animate={{ opacity: 1, y: 0 }}

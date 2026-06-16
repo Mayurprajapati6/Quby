@@ -428,6 +428,37 @@ body {
   box-shadow: 0 0 0 3px var(--violet-bg);
 }
 
+/* Make selects look interactive: gray bg, hover and pointer */
+select.q-input {
+  cursor: pointer;
+  transition: background 0.12s, transform 0.08s;
+  background: var(--bg-surface);
+  color: var(--text-1);
+  -webkit-appearance: none;
+  appearance: none;
+}
+select.q-input:hover {
+  background: rgba(255,255,255,0.02);
+}
+
+/* custom chevron arrow for select */
+/* remove background-image approach; use inline SVG in markup instead */
+.q-select-wrap { position: relative; }
+.q-select-wrap .q-input { padding-right: 44px; }
+.q-select-wrap .select-chevron { color: #c7c7d6; }
+.q-select-wrap:focus-within .select-chevron { color: #ffffff; }
+
+/* Try to style native option popup where supported */
+select.q-input option,
+select.q-input optgroup {
+  background: var(--bg-surface);
+  color: var(--text-1);
+}
+select.q-input option:hover,
+select.q-input option:checked {
+  background: rgba(255,255,255,0.06);
+}
+
 /* ──────────────────────────────────────────
    FORM LABEL
 ─────────────────────────────────────────── */
@@ -2037,6 +2068,20 @@ main tbody tr:hover {
   height: auto;
   max-height: 72px;
   margin-bottom: 16px !important;
+}
+
+/* Hide browser password reveal buttons */
+input::-ms-reveal,
+input::-ms-clear {
+  display: none;
+}
+
+input[type="password"]::-webkit-credentials-auto-fill-button {
+  display: none !important;
+}
+
+input[type="password"]::-webkit-textfield-decoration-container {
+  display: none !important;
 }
 
 @media (min-width: 768px) {

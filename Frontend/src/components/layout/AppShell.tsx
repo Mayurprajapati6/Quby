@@ -1416,8 +1416,8 @@ on('notification:new', () => {
             title={isConnected ? 'Connected' : 'Disconnected'}
           />
 
-          {/* Bell */}
-          <NotificationBell role={role} onNavigate={navigate} />
+          {/* Bell - hide for ADMIN */}
+          {role !== 'ADMIN' && <NotificationBell role={role} onNavigate={navigate} />}
 
           {/* Avatar / profile */}
           <ProfileButton

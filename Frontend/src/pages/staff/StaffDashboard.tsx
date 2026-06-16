@@ -735,7 +735,7 @@ const dayBkgData = useMemo(() => {
 
       {/* ══ ROW 4 — SERVICE REVENUE | TOP SERVICES ══ */}
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-4" style={{ gridAutoRows: '1fr' }}>
-
+now l
         {/* Service Wise Earnings */}
         <GCard accent="#f472b6" className="flex flex-col">
           <SectionHeader

@@ -2056,6 +2056,7 @@ export default function StaffQueue() {
     qrRunningCount,
     clientNoShowThisTick,
   } = useActiveQueue(liveBookings, serverOffset, optimisticRunningId, optimisticStartedAt, clientNoShowIds)
+  const localNowMs = useNow(0)
 
   useEffect(() => {
     if (clientNoShowThisTick.size === 0) return
@@ -2169,7 +2170,7 @@ export default function StaffQueue() {
             {isSocketConnected ? 'Live' : 'Offline'}
           </span>
           <span className="hidden font-mono text-[10px] sm:inline" style={{ color: 'var(--text-3)' }}>
-            · {new Date(nowMs).toLocaleTimeString('en-IN', { hour: '2-digit', minute: '2-digit', second: '2-digit', hour12: true })}
+            · {new Date(localNowMs).toLocaleTimeString('en-IN', { hour: '2-digit', minute: '2-digit', second: '2-digit', hour12: false })}
           </span>
         </div>
       </div>

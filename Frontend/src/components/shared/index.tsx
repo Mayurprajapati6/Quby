@@ -407,31 +407,41 @@ export function StateCitySelect({ stateValue, cityValue, onStateChange, onCityCh
     <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
       <div>
         <label className="q-label">State</label>
-        <select
-          value={stateValue}
-          onChange={(e) => onStateChange(e.target.value)}
-          disabled={disabled}
-          className="q-input"
-        >
-          <option value="">Select state</option>
-          {INDIA_STATES.map((s) => (
-            <option key={s} value={s}>{s}</option>
-          ))}
-        </select>
+        <div className="q-select-wrap relative">
+          <select
+            value={stateValue}
+            onChange={(e) => onStateChange(e.target.value)}
+            disabled={disabled}
+            className="q-input"
+          >
+            <option value="">Select state</option>
+            {INDIA_STATES.map((s) => (
+              <option key={s} value={s}>{s}</option>
+            ))}
+          </select>
+          <svg className="pointer-events-none absolute right-3 top-1/2 -translate-y-1/2 select-chevron" width="12" height="8" viewBox="0 0 12 8" fill="none" xmlns="http://www.w3.org/2000/svg">
+            <path d="M1 1l5 5 5-5" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round" strokeLinejoin="round" />
+          </svg>
+        </div>
       </div>
       <div>
         <label className="q-label">City</label>
-        <select
-          value={cityValue}
-          onChange={(e) => onCityChange(e.target.value)}
-          disabled={disabled || !stateValue}
-          className="q-input"
-        >
-          <option value="">{stateValue ? 'Select city' : 'Select state first'}</option>
-          {cities.map((c) => (
-            <option key={c} value={c}>{c}</option>
-          ))}
-        </select>
+        <div className="q-select-wrap relative">
+          <select
+            value={cityValue}
+            onChange={(e) => onCityChange(e.target.value)}
+            disabled={disabled || !stateValue}
+            className="q-input"
+          >
+            <option value="">{stateValue ? 'Select city' : 'Select state first'}</option>
+            {cities.map((c) => (
+              <option key={c} value={c}>{c}</option>
+            ))}
+          </select>
+          <svg className="pointer-events-none absolute right-3 top-1/2 -translate-y-1/2 select-chevron" width="12" height="8" viewBox="0 0 12 8" fill="none" xmlns="http://www.w3.org/2000/svg">
+            <path d="M1 1l5 5 5-5" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round" strokeLinejoin="round" />
+          </svg>
+        </div>
       </div>
     </div>
   )

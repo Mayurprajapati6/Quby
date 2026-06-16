@@ -847,7 +847,7 @@ export default function AdminBusinesses() {
   const resetFilters = () => { setStatus('all'); setRating('all'); setState(''); setCity(''); setOwner(''); setPage(1) }
 
   return (
-    <div className="min-h-screen pb-20 lg:pb-8 px-4 py-5 md:px-6 lg:px-8 max-w-4xl mx-auto space-y-4" style={{ background: 'var(--bg-page)' }}>
+    <div className="min-h-screen pb-20 lg:pb-8 px-4 py-5 md:px-6 lg:px-8 w-full space-y-4" style={{ background: 'var(--bg-page)' }}>
 
       <motion.div initial={{ opacity: 0, y: 8 }} animate={{ opacity: 1, y: 0 }}>
         <h1 className="font-syne font-black text-2xl lg:text-3xl" style={{ color: 'var(--text-1)' }}>Businesses</h1>

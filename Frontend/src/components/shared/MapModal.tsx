@@ -166,7 +166,7 @@ export function MapModal({ open, onClose, businessName, address, city, state, ma
             exit={{ opacity: 0 }}
             onClick={onClose}
             className="absolute inset-0"
-            style={{ background: 'rgba(0,0,0,0.75)', backdropFilter: 'blur(6px)' }}
+            style={{ background: 'rgba(128,128,128,0.65)', backdropFilter: 'blur(6px)' }}
           />
 
           {/* Modal */}
@@ -175,9 +175,9 @@ export function MapModal({ open, onClose, businessName, address, city, state, ma
             animate={{ opacity: 1, scale: 1, y: 0 }}
             exit={{ opacity: 0, scale: 0.95, y: 10 }}
             transition={{ type: 'spring', stiffness: 380, damping: 28 }}
-            className="relative w-full max-w-lg z-10 overflow-hidden"
+            className="relative w-full max-w-lg z-10 overflow-hidden max-h-[90vh] overflow-y-auto"
             style={{
-              background: 'var(--bg-card)',
+              background: 'var(--bg-surface)',
               border: '1px solid var(--border)',
               borderRadius: 18,
               boxShadow: '0 24px 80px rgba(0,0,0,0.5)',
@@ -232,12 +232,13 @@ export function MapModal({ open, onClose, businessName, address, city, state, ma
             </div>
 
             {/* Action buttons */}
-            <div className="grid grid-cols-3 gap-2 px-4 pb-4">
+            <div className="grid grid-cols-1 sm:grid-cols-3 gap-2 px-4 pb-4">
               <motion.button
                 whileTap={{ scale: 0.96 }}
+                whileHover={{ scale: 1.03 }}
                 onClick={openDirections}
                 className="flex flex-col items-center gap-1.5 py-2.5 rounded-[10px] transition-all"
-                style={{ background: 'var(--violet-bg)', border: '1px solid var(--violet-border)' }}
+                style={{ background: 'var(--violet-bg)', border: '1px solid var(--violet-border)', cursor: 'pointer' }}
               >
                 <Navigation size={15} style={{ color: 'var(--violet-light)' }} />
                 <span className="text-[10px] font-syne font-bold" style={{ color: 'var(--violet-light)' }}>
@@ -247,9 +248,10 @@ export function MapModal({ open, onClose, businessName, address, city, state, ma
 
               <motion.button
                 whileTap={{ scale: 0.96 }}
+                whileHover={{ scale: 1.03 }}
                 onClick={openInMaps}
                 className="flex flex-col items-center gap-1.5 py-2.5 rounded-[10px] transition-all"
-                style={{ background: 'var(--bg-surface)', border: '1px solid var(--border)' }}
+                style={{ background: 'var(--bg-surface)', border: '1px solid var(--border)', cursor: 'pointer' }}
               >
                 <ExternalLink size={15} style={{ color: 'var(--text-2)' }} />
                 <span className="text-[10px] font-syne font-bold" style={{ color: 'var(--text-2)' }}>
@@ -259,9 +261,10 @@ export function MapModal({ open, onClose, businessName, address, city, state, ma
 
               <motion.button
                 whileTap={{ scale: 0.96 }}
+                whileHover={{ scale: 1.03 }}
                 onClick={copyAddress}
                 className="flex flex-col items-center gap-1.5 py-2.5 rounded-[10px] transition-all"
-                style={{ background: 'var(--bg-surface)', border: '1px solid var(--border)' }}
+                style={{ background: 'var(--bg-surface)', border: '1px solid var(--border)', cursor: 'pointer' }}
               >
                 {copied
                   ? <Check size={15} style={{ color: 'var(--green)' }} />
