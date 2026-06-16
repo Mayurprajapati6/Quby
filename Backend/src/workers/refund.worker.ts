@@ -14,10 +14,6 @@ interface RefundJobData {
   reason:    string;
 }
 
-function safeRefundReceipt(bookingId: string): string {
-  return `rfnd_${bookingId.replace(/[^a-zA-Z0-9]/g, "").slice(0, 24)}`;
-}
-
 function readRazorpayAmount(value: unknown): number | null {
   const amount = Number(value);
   return Number.isFinite(amount) && amount > 0 ? Math.floor(amount) : null;
@@ -107,7 +103,6 @@ export const refundWorker = new Worker<RefundJobData>(
 
       refund = await razorpay.payments.refund(razorpayPaymentId, {
         amount: refundAmount,
-        receipt: safeRefundReceipt(bookingId),
         notes: { booking_id: bookingId, reason: String(reason ?? "Booking cancellation").slice(0, 240) },
       });
     } catch (razorpayErr: any) {

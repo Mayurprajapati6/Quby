@@ -1789,12 +1789,11 @@ function UpcomingBookingCardV2({ booking, hasQrRunning, onStart, nowMs, rank }: 
       <div className="grid gap-4">
         <div className="grid grid-cols-[auto_1fr_auto] items-center gap-3">
           <Avatar name={booking.customer.name} src={booking.customer.avatar_url ?? undefined} size="sm" />
-          <p className="min-w-0 truncate font-syne text-[15px] font-bold" style={{ color: 'var(--text-1)' }}>{booking.customer.name}</p>
+          <div className="min-w-0">
+            <p className="truncate font-syne text-[15px] font-bold" style={{ color: 'var(--text-1)' }}>{booking.customer.name}</p>
+            <p className="text-[11px] font-bold" style={{ color: 'var(--violet-light)' }}>Queue #{booking.queue_number}</p>
+          </div>
           <StatusBadgeV2 tone={badgeTone}>{badgeText}</StatusBadgeV2>
-        </div>
-        <div className="rounded-2xl p-4" style={{ background: 'var(--bg-surface)', border: '1px solid var(--border)' }}>
-          <p className="text-[10px] font-bold uppercase tracking-widest" style={{ color: 'var(--text-3)' }}>Queue</p>
-          <p className="mt-1 font-syne text-[30px] font-black leading-none" style={{ color: 'var(--violet-light)' }}>#{booking.queue_number}</p>
         </div>
         <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
           <InfoBlockV2 label="Arrival Window" value={`${fmtTime(booking.arrival_window_start)} - ${fmtTime(booking.arrival_window_end)}`} />

@@ -738,6 +738,11 @@ export class BookingRepository {
         orderBy = [{ service_date: "asc" }, { service_start_time: "asc" }];
         break;
  
+      case "running":
+        where   = { ...base, status: "RUNNING" };
+        orderBy = [{ service_date: "desc" }, { service_start_time: "desc" }];
+        break;
+ 
       case "upcoming":
         where   = { ...base, status: "CONFIRMED", service_date: { gte: todayStart } };
         orderBy = [{ service_date: "asc" }, { service_start_time: "asc" }];
