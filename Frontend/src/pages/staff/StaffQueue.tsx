@@ -1669,11 +1669,13 @@ function RunningCardV2({ booking, onComplete, onExtend, isActing, serverOffset, 
   const [showCompleteModal, setShowCompleteModal] = useState(false)
   const hasStarted = !!booking.service_started_at
   const startedAt  = booking.service_started_at
+  const firstService = booking.services?.[0]
+  const serviceCount = booking.services?.length ?? 0
 
   return (
     <>
       <motion.div layout initial={{ opacity: 0, y: 16 }} animate={{ opacity: 1, y: 0 }}
-        className="q-card rounded-2xl overflow-hidden min-h-[330px] lg:h-[360px]"
+        className="q-card rounded-2xl min-h-[330px]"
         style={{ borderColor: hasStarted ? 'rgba(52,211,153,0.32)' : 'rgba(124,58,237,0.36)' }}>
         <div className="grid h-full content-start gap-5 p-4 sm:p-6">
           <div className="grid grid-cols-[auto_1fr_auto] items-center gap-4">
@@ -1714,6 +1716,23 @@ function RunningCardV2({ booking, onComplete, onExtend, isActing, serverOffset, 
             </div>
           ) : startedAt ? (
             <div className="grid gap-5">
+              <div className="flex items-center gap-3 rounded-2xl p-3"
+                style={{ background: 'var(--bg-surface)', border: '1px solid var(--border)' }}>
+                <img
+                  src={firstService?.image || '/placeholder-service.png'}
+                  alt={firstService?.name || 'Service'}
+                  className="h-12 w-12 flex-shrink-0 rounded-xl object-cover"
+                  onError={e => { (e.currentTarget as HTMLImageElement).src = '/placeholder-service.png' }}
+                />
+                <div className="min-w-0">
+                  <p className="truncate font-syne text-[15px] font-black" style={{ color: 'var(--text-1)' }}>
+                    {firstService?.name || 'Service'}
+                  </p>
+                  <p className="mt-0.5 text-[12px]" style={{ color: 'var(--text-3)' }}>
+                    {serviceCount > 1 ? `${serviceCount} services` : `${booking.estimated_duration} min`}
+                  </p>
+                </div>
+              </div>
               <div className="grid grid-cols-1 gap-3 sm:grid-cols-3">
                 <MetricCardV2 label="Queue Number" value={`#${booking.queue_number}`} />
                 <MetricCardV2 label="Duration" value={`${booking.estimated_duration} min`} />
@@ -1726,12 +1745,12 @@ function RunningCardV2({ booking, onComplete, onExtend, isActing, serverOffset, 
                 onExtend={() => setShowExtend(true)} onComplete={() => setShowCompleteModal(true)} isActing={isActing} />
               <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
                 <motion.button whileTap={{ scale: 0.98 }} onClick={() => setShowCompleteModal(true)} disabled={isActing}
-                  className="h-12 rounded-2xl font-syne text-[14px] font-bold flex items-center justify-center gap-2"
+                  className="h-14 rounded-2xl font-syne text-[15px] font-black flex items-center justify-center gap-2"
                   style={{ background: 'linear-gradient(135deg, #059669, #34d399)', color: '#fff', border: 'none', cursor: 'pointer' }}>
                   <CheckCircle2 size={16} /> Complete
                 </motion.button>
                 <motion.button whileTap={{ scale: 0.98 }} onClick={() => setShowExtend(true)} disabled={isActing}
-                  className="h-12 rounded-2xl font-syne text-[14px] font-bold flex items-center justify-center gap-2"
+                  className="h-14 rounded-2xl font-syne text-[15px] font-black flex items-center justify-center gap-2"
                   style={{ background: 'var(--violet-bg)', color: 'var(--violet-light)', border: '1px solid var(--violet-border)', cursor: 'pointer' }}>
                   <AlarmClock size={16} /> Extend
                 </motion.button>

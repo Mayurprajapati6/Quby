@@ -13,10 +13,11 @@ const queryClient = new QueryClient({
   defaultOptions: {
     queries: {
       retry: (failureCount, error) => {
-        const status = (error as { response?: { status?: number } })?.response?.status
+        const status = (error as { response?: { status?: number }; code?: string })?.response?.status
         if (status === 401 || status === 403 || status === 404) return false
-        return failureCount < 2
+        return failureCount < (import.meta.env.PROD ? 4 : 2)
       },
+      retryDelay: attemptIndex => Math.min(1000 * 2 ** attemptIndex, 10_000),
       refetchOnWindowFocus: false,
       refetchOnMount: true,      
       staleTime: 15_000,        
@@ -26,6 +27,21 @@ const queryClient = new QueryClient({
     },
   },
 })
+
+async function fetchWithRetry(input: RequestInfo | URL, init: RequestInit, attempts = 4): Promise<Response> {
+  let lastError: unknown
+  for (let attempt = 0; attempt < attempts; attempt++) {
+    try {
+      const response = await fetch(input, init)
+      if (response.ok || response.status === 401 || response.status === 403) return response
+      lastError = new Error(`HTTP ${response.status}`)
+    } catch (error) {
+      lastError = error
+    }
+    await new Promise(resolve => setTimeout(resolve, Math.min(1000 * 2 ** attempt, 8000)))
+  }
+  throw lastError instanceof Error ? lastError : new Error('request_failed')
+}
 
 function AuthInit() {
   useEffect(() => {
@@ -41,11 +57,11 @@ function AuthInit() {
     const baseUrl =
   import.meta.env.VITE_API_BASE_URL || 'http://localhost:3004/api/v1'
 
-    fetch(`${baseUrl}/auth/refresh`, {
+    fetchWithRetry(`${baseUrl}/auth/refresh`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ refresh_token: refreshToken }),
-    })
+    }, import.meta.env.PROD ? 5 : 2)
       .then(async (res) => {
         if (!res.ok) throw new Error('refresh_failed')
         const json = await res.json()

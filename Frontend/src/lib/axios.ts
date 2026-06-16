@@ -8,7 +8,7 @@ const BASE_URL =
 export const api = axios.create({
   baseURL: BASE_URL,
   headers: { 'Content-Type': 'application/json' },
-  timeout: 30_000,
+  timeout: import.meta.env.PROD ? 90_000 : 30_000,
 })
 
 // ── In-memory token store (never written to localStorage) ─────────
