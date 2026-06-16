@@ -675,7 +675,7 @@ export default function StaffBookings() {
       const r = await api.get('/staff/bookings', { params })
       return r.data.data
     },
-    refetchInterval: (status === '' || status === 'running') ? 20_000 : 60_000,
+    refetchInterval: (status === '' || status === 'running') ? 20_000 : status === 'cancelled' ? 30_000 : 60_000,
   })
 
   const pagination = data?.pagination

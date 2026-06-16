@@ -644,7 +644,7 @@ export default function OwnerBookings() {
     },
     staleTime: 0,
     gcTime: 60_000,
-    refetchInterval: tab === 'running' ? 15_000 : tab === 'today' ? 30_000 : false,
+    refetchInterval: tab === 'running' ? 15_000 : tab === 'today' ? 30_000 : tab === 'refund' ? 30_000 : false,
   })
 
   const pagination = data?.pagination

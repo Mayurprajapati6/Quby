@@ -1716,21 +1716,24 @@ function RunningCardV2({ booking, onComplete, onExtend, isActing, serverOffset, 
             </div>
           ) : startedAt ? (
             <div className="grid gap-5">
-              <div className="flex items-center gap-3 rounded-2xl p-3"
+              <div className="rounded-2xl p-3"
                 style={{ background: 'var(--bg-surface)', border: '1px solid var(--border)' }}>
-                <img
-                  src={firstService?.image || '/placeholder-service.png'}
-                  alt={firstService?.name || 'Service'}
-                  className="h-12 w-12 flex-shrink-0 rounded-xl object-cover"
-                  onError={e => { (e.currentTarget as HTMLImageElement).src = '/placeholder-service.png' }}
-                />
-                <div className="min-w-0">
-                  <p className="truncate font-syne text-[15px] font-black" style={{ color: 'var(--text-1)' }}>
-                    {firstService?.name || 'Service'}
-                  </p>
-                  <p className="mt-0.5 text-[12px]" style={{ color: 'var(--text-3)' }}>
-                    {serviceCount > 1 ? `${serviceCount} services` : `${booking.estimated_duration} min`}
-                  </p>
+                <p className="text-[10px] font-bold uppercase tracking-widest mb-2" style={{ color: 'var(--text-3)' }}>Services</p>
+                <div className="flex flex-wrap gap-2">
+                  {booking.services.map((service, i) => (
+                    <div key={i} className="flex items-center gap-2 px-3 py-2 rounded-xl"
+                      style={{ background: 'rgba(124,58,237,0.1)', border: '1px solid rgba(124,58,237,0.25)' }}>
+                      <img
+                        src={service.image || '/placeholder-service.png'}
+                        alt={service.name}
+                        className="h-8 w-8 flex-shrink-0 rounded-lg object-cover"
+                        onError={e => { (e.currentTarget as HTMLImageElement).src = '/placeholder-service.png' }}
+                      />
+                      <span className="font-syne text-[13px] font-bold" style={{ color: 'var(--violet-light)' }}>
+                        {service.name}
+                      </span>
+                    </div>
+                  ))}
                 </div>
               </div>
               <div className="grid grid-cols-1 gap-3 sm:grid-cols-3">
@@ -1741,8 +1744,6 @@ function RunningCardV2({ booking, onComplete, onExtend, isActing, serverOffset, 
               <div className="rounded-2xl p-4" style={{ background: 'var(--bg-surface)', border: '1px solid var(--border)' }}>
                 <ServiceTimer startedAt={startedAt} estimatedMin={booking.estimated_duration} serverOffset={serverOffset} />
               </div>
-              <OverrunPanel startedAt={startedAt} estimatedMin={booking.estimated_duration} serverOffset={serverOffset}
-                onExtend={() => setShowExtend(true)} onComplete={() => setShowCompleteModal(true)} isActing={isActing} />
               <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
                 <motion.button whileTap={{ scale: 0.98 }} onClick={() => setShowCompleteModal(true)} disabled={isActing}
                   className="h-14 rounded-2xl font-syne text-[15px] font-black flex items-center justify-center gap-2"

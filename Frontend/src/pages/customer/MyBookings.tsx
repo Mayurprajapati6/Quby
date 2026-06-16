@@ -1045,14 +1045,14 @@ export default function MyBookings() {
   }
 
   useSocketEvent('booking:updated',     invalidate)
-  useSocketEvent('booking:lonfirmed',   (d: any) => { invalidate(); toast.success(`Booking lonfirmed with ${d.staffName} at ${d.businessName}`) })
-  useSocketEvent('booking:cancelled',   (d: any) => { invalidate(); toast.info(`Your booking with ${d.staffName} was cancelled`) })
-  useSocketEvent('service:started',     (d: any) => { invalidate(); toast.success('✅ Your service has started!') })
-  useSocketEvent('service:completed',   (d: any) => { invalidate(); toast.success(`Service completed with ${d.staffName}`) })
-  useSocketEvent('booking:no_show',     (d: any) => { invalidate(); toast.warning(`You missed your appointment with ${d.staffName}`) })
-  useSocketEvent('refund:initiated',    (d: any) => { invalidate(); toast.info(`Refund initiated for ${d.businessName}`) })
-  useSocketEvent('refund:completed',    (d: any) => { invalidate(); toast.success(`Refund lredited from ${d.businessName}`) })
-  useSocketEvent('queue:updated',       ()        => { invalidate(); toast.info('⏳ Queue updated. Your turn timing may shift.') })
+  useSocketEvent('booking:confirmed',   () => invalidate())
+  useSocketEvent('booking:cancelled',   () => invalidate())
+  useSocketEvent('service:started',     () => { invalidate(); toast.success('✅ Your service has started!') })
+  useSocketEvent('service:completed',   () => { invalidate(); toast.success('Service completed!') })
+  useSocketEvent('booking:no_show',     () => { invalidate(); toast.warning('You missed your appointment') })
+  useSocketEvent('refund:initiated',    () => invalidate())
+  useSocketEvent('refund:completed',    () => { invalidate(); toast.success('Refund completed!') })
+  useSocketEvent('queue:updated',       invalidate)
   useSocketEvent('booking:time_updated', invalidate)
   useSocketEvent('service:delayed',     invalidate)
 
