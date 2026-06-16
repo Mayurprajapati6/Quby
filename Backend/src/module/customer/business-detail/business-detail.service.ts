@@ -18,9 +18,7 @@ function toIST(date: Date | null | undefined): string | null {
 }
 
 function todayDowIST(): string {
-  const now  = new Date(new Date().toLocaleString("en-US", { timeZone: IST }));
-  const days = ["SUNDAY","MONDAY","TUESDAY","WEDNESDAY","THURSDAY","FRIDAY","SATURDAY"];
-  return days[now.getDay()];
+  return formatInTimeZone(new Date(), IST, "EEEE").toUpperCase();
 }
 
 function checkIsOpenNow(
@@ -30,8 +28,9 @@ function checkIsOpenNow(
   const sched = schedules.find(s => s.day_of_week === dow);
   if (!sched?.is_open || !sched.open_time || !sched.close_time) return false;
 
-  const now  = new Date(new Date().toLocaleString("en-US", { timeZone: IST }));
-  const nowM = now.getHours() * 60 + now.getMinutes();
+  const timeStr = formatInTimeZone(new Date(), IST, "HH:mm");
+  const [hours, minutes] = timeStr.split(":").map(Number);
+  const nowM = hours * 60 + minutes;
   const [oh, om] = sched.open_time.split(":").map(Number);
   const [ch, cm] = sched.close_time.split(":").map(Number);
   return nowM >= oh * 60 + om && nowM < ch * 60 + cm;

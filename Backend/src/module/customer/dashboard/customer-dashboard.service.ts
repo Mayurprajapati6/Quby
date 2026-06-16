@@ -33,9 +33,10 @@ export class CustomerDashboardService {
     const customer = await CustomerDashboardRepository.findCustomerWithWallet(userId);
     if (!customer) throw new NotFoundError("Customer profile not found.");
 
-    const now          = new Date(new Date().toLocaleString("en-US", { timeZone: IST }));
-    const filterMonth  = filters.month ?? (now.getMonth() + 1);
-    const filterYear   = filters.year  ?? now.getFullYear();
+    const todayIST     = formatInTimeZone(new Date(), IST, "yyyy-MM-dd");
+    const [year, month] = todayIST.split("-").map(Number);
+    const filterMonth  = filters.month ?? month;
+    const filterYear   = filters.year  ?? year;
 
     const [
   pendingReviewCount,

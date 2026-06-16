@@ -1029,7 +1029,7 @@ export default function BookingFlow() {
         initial={{ opacity: 0 }}
         animate={{ opacity: 1 }}
         exit={{ opacity: 0 }}
-        style={{ position: 'fixed', inset: 0, zIndex: 250, display: 'grid', placeItems: 'center', background: 'rgba(5,7,18,0.72)', backdropFilter: 'blur(10px)', padding: 20 }}
+        style={{ position: 'fixed', inset: 0, zIndex: 250, display: 'flex', alignItems: 'center', justifyContent: 'center', background: 'rgba(5,7,18,0.72)', backdropFilter: 'blur(10px)', padding: 20, overflowY: 'auto' }}
       >
         <motion.div
           initial={{ opacity: 0, y: 20, scale: 0.94 }}
@@ -1037,7 +1037,7 @@ export default function BookingFlow() {
           exit={{ opacity: 0, y: 12, scale: 0.96 }}
           transition={{ type: 'spring', stiffness: 320, damping: 26 }}
           className="bf-card"
-          style={{ width: 'min(460px, 100%)', background: 'var(--bg-card)', overflow: 'hidden' }}
+          style={{ width: 'min(460px, 100%)', maxHeight: 'calc(100vh - 40px)', overflowY: 'auto', background: 'var(--bg-card)' }}
         >
           <div style={{ padding: 22, borderBottom: '1px solid rgba(255,255,255,0.08)', background: 'var(--green-bg)', textAlign: 'center' }}>
             <div style={{ width: 54, height: 54, borderRadius: 999, display: 'grid', placeItems: 'center', margin: '0 auto 12px', background: 'var(--green)', color: '#fff' }}>

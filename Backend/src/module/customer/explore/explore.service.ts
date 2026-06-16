@@ -1,3 +1,4 @@
+import { formatInTimeZone } from "date-fns-tz";
 import { ExploreRepository } from "./explore.repository";
 import { haversineDistance } from "../../../utils/helpers/haversine";
 import type {
@@ -6,16 +7,13 @@ import type {
   ExploreResponse,
 } from "./explore.types";
 
+const TZ = "Asia/Kolkata";
+
 function nowIST(): { hours: number; minutes: number; dayOfWeek: string } {
-  const now = new Date(
-    new Date().toLocaleString("en-US", { timeZone: "Asia/Kolkata" })
-  );
-  const days = ["SUNDAY","MONDAY","TUESDAY","WEDNESDAY","THURSDAY","FRIDAY","SATURDAY"];
-  return {
-    hours:     now.getHours(),
-    minutes:   now.getMinutes(),
-    dayOfWeek: days[now.getDay()],
-  };
+  const dateStr = formatInTimeZone(new Date(), TZ, "yyyy-MM-dd HH:mm:ss EEEE");
+  const [datePart, timePart, dayOfWeek] = dateStr.split(" ");
+  const [hours, minutes] = timePart.split(":").map(Number);
+  return { hours, minutes, dayOfWeek: dayOfWeek.toUpperCase() };
 }
 
 function checkIsOpenNow(

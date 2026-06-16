@@ -713,10 +713,10 @@ export class BookingRepository {
 
   // ── findByCustomerTab ───────────────────────────────────────────────────────
   static async findByCustomerTab(customer_id: string, tab: string, page: number, limit: number) {
-    // IST-correct today boundaries
-    const nowIST = new Date(new Date().toLocaleString("en-US", { timeZone: IST }));
-    const todayStart = new Date(nowIST); todayStart.setHours(0, 0, 0, 0);
-    const todayEnd   = new Date(nowIST); todayEnd.setHours(23, 59, 59, 999);
+    // IST-correct today boundaries using formatInTimeZone
+    const todayIST = formatInTimeZone(new Date(), IST, "yyyy-MM-dd");
+    const todayStart = new Date(todayIST + "T00:00:00+05:30");
+    const todayEnd   = new Date(todayIST + "T23:59:59+05:30");
  
     const base: any = {
       customer_id,

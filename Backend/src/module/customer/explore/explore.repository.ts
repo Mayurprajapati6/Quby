@@ -1,13 +1,13 @@
 import { prisma } from "../../../config/prisma";
 import { DayOfWeek } from "../../../../generated/prisma/enums";
+import { formatInTimeZone } from "date-fns-tz";
 import type { ExploreFilters } from "./explore.types";
 
+const TZ = "Asia/Kolkata";
+
 function todayDayOfWeek(): DayOfWeek {
-  const now = new Date(
-    new Date().toLocaleString("en-US", { timeZone: "Asia/Kolkata" })
-  );
-  const days: DayOfWeek[] = ["SUNDAY","MONDAY","TUESDAY","WEDNESDAY","THURSDAY","FRIDAY","SATURDAY"];
-  return days[now.getDay()];
+  const dayName = formatInTimeZone(new Date(), TZ, "EEEE").toUpperCase();
+  return dayName as DayOfWeek;
 }
 
 export class ExploreRepository {

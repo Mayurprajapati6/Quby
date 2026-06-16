@@ -80,9 +80,10 @@ export class BookingService {
     if (!business?.is_active) throw new NotFoundError("Business not found or unavailable.");
 
     // ── Past-date guard ───────────────────────────────────────────────────────
+    // Use date-fns-tz to get current date in IST timezone (works on any server timezone)
+    const todayIST = formatInTimeZone(new Date(), TZ, "yyyy-MM-dd");
     const dateObj = new Date(service_date + "T00:00:00+05:30");
-    const todayTZ = new Date(new Date().toLocaleString("en-US", { timeZone: TZ }));
-    todayTZ.setHours(0, 0, 0, 0);
+    const todayTZ = new Date(todayIST + "T00:00:00+05:30");
     if (dateObj < todayTZ) {
       throw new BadRequestError("Cannot book a date in the past.", {
         reason: "past_date" satisfies AvailabilityErrorReason,
