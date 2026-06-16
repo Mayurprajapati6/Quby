@@ -6,6 +6,34 @@
     <meta name="description" content="Quby — Smart Salon Queue Booking" />
     <meta name="theme-color" content="#7c3aed" id="theme-color-meta" />
 
+    <!-- ✅ CRITICAL CSS: Prevent FOUC (Flash of Unstyled Content) -->
+    <style>
+      /* Prevent black flash on load */
+      html, body {
+        margin: 0;
+        padding: 0;
+        background-color: #16172b;
+        color: #dde0ff;
+        font-family: system-ui, -apple-system, sans-serif;
+      }
+      
+      /* Hide content until CSS loads */
+      #root {
+        opacity: 0;
+        transition: opacity 0.15s ease-in;
+      }
+      
+      #root.loaded {
+        opacity: 1;
+      }
+      
+      /* Prevent white flash during theme switch */
+      [data-theme="light"] {
+        background-color: #f8f9fa;
+        color: #1a1a1a;
+      }
+    </style>
+
     <script>
       const stored = localStorage.getItem('quby_ui');
       if (stored) {
@@ -16,6 +44,13 @@
           }
         } catch (e) {}
       }
+      
+      // ✅ Show content when DOM is ready
+      document.addEventListener('DOMContentLoaded', () => {
+        setTimeout(() => {
+          document.getElementById('root')?.classList.add('loaded');
+        }, 50);
+      });
     </script>
 
     <!--
