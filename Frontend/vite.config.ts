@@ -11,6 +11,16 @@ export default defineConfig({
       'motion/react': 'framer-motion',
     },
   },
+  build: {
+    // ✅ FIX: Prevent chunk loading errors on Vercel
+    rollupOptions: {
+      output: {
+        manualChunks: undefined,
+      },
+    },
+    // Increase chunk size warning limit
+    chunkSizeWarningLimit: 1000,
+  },
   server: {
     port: 5173,
     host: '0.0.0.0',   // ← allows access from mobile/other devices on same WiFi
