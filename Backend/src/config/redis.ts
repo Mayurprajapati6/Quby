@@ -25,15 +25,25 @@ function createRedisClient(name: string): IORedis {
     },
   };
 
-  const client = serverConfig.REDIS_URL
-    ? new IORedis(serverConfig.REDIS_URL, commonOptions)
-    : new IORedis({
-        host: serverConfig.REDIS_HOST ?? "127.0.0.1",
-        port: Number(serverConfig.REDIS_PORT ?? 6379),
-        password: serverConfig.REDIS_PASSWORD || undefined,
-        db: Number(serverConfig.REDIS_DB ?? 0),
-        ...commonOptions,
-      });
+  console.log({
+  REDIS_URL: serverConfig.REDIS_URL,
+  REDIS_HOST: serverConfig.REDIS_HOST,
+  REDIS_PORT: serverConfig.REDIS_PORT,
+});
+
+  const useUpstash =
+  serverConfig.NODE_ENV === "production" &&
+  !!serverConfig.REDIS_URL;
+
+const client = useUpstash
+  ? new IORedis(serverConfig.REDIS_URL, commonOptions)
+  : new IORedis({
+      host: serverConfig.REDIS_HOST,
+      port: serverConfig.REDIS_PORT,
+      password: serverConfig.REDIS_PASSWORD || undefined,
+      db: serverConfig.REDIS_DB,
+      ...commonOptions,
+    });
 
   client.on("connect", () =>
     logger.info(`[Redis:${name}] Connected`)

@@ -541,29 +541,49 @@ export class PaymentService {
       }
 
       // ── refund.processed / refund.created ────────────────────────────────
-      case "refund.processed":
       case "refund.created": {
         const refund  = event.payload?.refund?.entity;
         const payment = event.payload?.payment?.entity;
+        const paymentId = payment?.id ?? refund?.payment_id;
 
-        if (!refund || !payment) {
-          logger.warn("[Webhook] Missing refund/payment in payload");
+        if (!refund || !paymentId) {
+          logger.warn("[Webhook] Missing refund/payment id in refund.created payload");
+          break;
+        }
+
+        const { handleRefundWebhookCreated } = await import("../../workers/refund.worker");
+        await handleRefundWebhookCreated(paymentId, refund.id, refund.amount);
+        logger.info(`[Webhook] Refund created for payment ${paymentId}`);
+        break;
+      }
+
+      case "refund.processed": {
+        const refund  = event.payload?.refund?.entity;
+        const payment = event.payload?.payment?.entity;
+        const paymentId = payment?.id ?? refund?.payment_id;
+
+        if (!refund || !paymentId) {
+          logger.warn("[Webhook] Missing refund/payment id in refund.processed payload");
           break;
         }
 
         const { handleRefundWebhookConfirmed } = await import("../../workers/refund.worker");
-        await handleRefundWebhookConfirmed(payment.id, refund.id);
-        logger.info(`[Webhook] Refund handled for payment ${payment.id}`);
+        await handleRefundWebhookConfirmed(paymentId, refund.id, refund.amount);
+        logger.info(`[Webhook] Refund handled for payment ${paymentId}`);
         break;
       }
 
       // ── refund.failed: refund attempt failed ──────────────────────────────
       case "refund.failed": {
-        const orderId = event.payload?.refund?.entity?.order_id;
-        if (!orderId) break;
+        const refund = event.payload?.refund?.entity;
+        const paymentId = refund?.payment_id;
+        const orderId = refund?.order_id;
+        if (!paymentId && !orderId) break;
 
-        const paymentRecord = await prisma.payment.findUnique({
-          where:  { razorpay_order_id: orderId },
+        const paymentRecord = await prisma.payment.findFirst({
+          where:  paymentId
+            ? { razorpay_payment_id: paymentId }
+            : { razorpay_order_id: orderId },
           select: { booking_id: true },
         }).catch(() => null);
 
@@ -573,8 +593,10 @@ export class PaymentService {
               where: { id: paymentRecord.booking_id },
               data:  { status: "CANCELLED" },
             }),
-            prisma.payment.update({
-              where: { razorpay_order_id: orderId },
+            prisma.payment.updateMany({
+              where: paymentId
+                ? { razorpay_payment_id: paymentId }
+                : { razorpay_order_id: orderId },
               data:  { refund_status: "FAILED" },
             }),
           ]).catch(() => {});

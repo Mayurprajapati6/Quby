@@ -177,7 +177,6 @@ export class BusinessBookingsService {
         await tx.payment.update({
           where: { booking_id: bookingId },
           data:  {
-            status:        "REFUNDED",
             refund_amount: payment.amount,
             refund_status: "PROCESSING",
             refund_reason: "Cancelled by business",
@@ -188,24 +187,25 @@ export class BusinessBookingsService {
 
     // ── Enqueue Razorpay refund with retries ───────────────────
     if (payment?.razorpay_payment_id && payment?.status === "PAID") {
+      const safeId = String(bookingId).replace(/:/g, "-");
       await refundQueue.add(
-        `refund:${bookingId}`,
+        `refund-${safeId}`,
         {
           bookingId,
           paymentId: payment.razorpay_payment_id,
           amount:    payment.amount,
           reason:    "Cancelled by business",
         },
-        { jobId: `refund:${bookingId}`, attempts: 5 },
+        { jobId: `refund-${safeId}`, attempts: 5 },
       ).catch(err => logger.error(`[BusinessBookings] Refund queue failed for ${bookingId}:`, err));
     }
 
     // ── Cancel scheduled jobs ──────────────────────────────────
     await Promise.allSettled([
-      bookingQueue.getJob(`no-show:${bookingId}`).then(j => j?.remove()).catch(() => {}),
-      settleQueue.getJob(`settle:${bookingId}`).then(j => j?.remove()).catch(() => {}),
-      notificationQueue.getJob(`reminder-1hr:${bookingId}`).then(j => j?.remove()).catch(() => {}),
-      notificationQueue.getJob(`reminder-15min:${bookingId}`).then(j => j?.remove()).catch(() => {}),
+      bookingQueue.getJob(`no-show-${String(bookingId).replace(/:/g, "-")}`).then(j => j?.remove()).catch(() => {}),
+      settleQueue.getJob(`settle-${String(bookingId).replace(/:/g, "-")}`).then(j => j?.remove()).catch(() => {}),
+      notificationQueue.getJob(`reminder-1hr-${String(bookingId).replace(/:/g, "-")}`).then(j => j?.remove()).catch(() => {}),
+      notificationQueue.getJob(`reminder-15min-${String(bookingId).replace(/:/g, "-")}`).then(j => j?.remove()).catch(() => {}),
     ]);
 
     // ── Customer notification + email ──────────────────────────

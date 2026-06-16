@@ -14,6 +14,15 @@ interface RefundJobData {
   reason:    string;
 }
 
+function safeRefundReceipt(bookingId: string): string {
+  return `rfnd_${bookingId.replace(/[^a-zA-Z0-9]/g, "").slice(0, 24)}`;
+}
+
+function readRazorpayAmount(value: unknown): number | null {
+  const amount = Number(value);
+  return Number.isFinite(amount) && amount > 0 ? Math.floor(amount) : null;
+}
+
 export const refundWorker = new Worker<RefundJobData>(
   QUEUE_NAMES.REFUND,
   async (job: Job<RefundJobData>) => {
@@ -22,7 +31,15 @@ export const refundWorker = new Worker<RefundJobData>(
 
     const payment = await prisma.payment.findUnique({
       where:  { booking_id: bookingId },
-      select: { refund_status: true, status: true },
+      select: {
+        id:                  true,
+        amount:              true,
+        refund_id:           true,
+        refund_status:       true,
+        refund_amount:       true,
+        status:              true,
+        razorpay_payment_id: true,
+      },
     });
 
     if (!payment) {
@@ -35,23 +52,78 @@ export const refundWorker = new Worker<RefundJobData>(
       return { status: "already_done" };
     }
 
-let refund: any;
-try {
-  refund = await razorpay.payments.refund(paymentId, {
-    amount,
-    notes: { booking_id: bookingId, reason },
-  });
-} catch (razorpayErr: any) {
-  const desc = razorpayErr?.error?.description
-    ?? razorpayErr?.message
-    ?? JSON.stringify(razorpayErr);
-  logger.error(`[RefundWorker] Razorpay API error: ${desc}`, {
-    statusCode: razorpayErr?.statusCode,
-    code:       razorpayErr?.error?.code,
-    raw:        razorpayErr,
-  });
-  throw new Error(desc);
-}
+    const razorpayPaymentId = payment.razorpay_payment_id ?? paymentId;
+    if (!razorpayPaymentId) {
+      throw new Error(`Missing Razorpay payment id for booking ${bookingId}`);
+    }
+
+    if (paymentId && payment.razorpay_payment_id && paymentId !== payment.razorpay_payment_id) {
+      logger.warn(`[RefundWorker] Job paymentId mismatch for ${bookingId}; using database payment id`);
+    }
+
+    let refund: any;
+    let refundAmount = readRazorpayAmount(amount) ?? readRazorpayAmount(payment.refund_amount) ?? payment.amount;
+
+    try {
+      const remotePayment: any = await razorpay.payments.fetch(razorpayPaymentId);
+      const capturedAmount = readRazorpayAmount(remotePayment?.amount);
+      const alreadyRefunded = readRazorpayAmount(remotePayment?.amount_refunded) ?? 0;
+
+      if (capturedAmount) {
+        const refundableAmount = Math.max(0, capturedAmount - alreadyRefunded);
+
+        if (refundableAmount <= 0) {
+          await prisma.$transaction([
+            prisma.booking.update({
+              where: { id: bookingId },
+              data:  { status: "REFUNDED" },
+            }),
+            prisma.payment.update({
+              where: { id: payment.id },
+              data:  {
+                status:        "REFUNDED",
+                refund_status: "DONE",
+                refund_amount: payment.refund_amount ?? capturedAmount,
+                refunded_at:   new Date(),
+              },
+            }),
+            prisma.bookingEvent.create({
+              data: {
+                booking_id: bookingId,
+                event_type: "REFUND_COMPLETED",
+                event_data: {
+                  amount: payment.refund_amount ?? capturedAmount,
+                  source: "razorpay_already_refunded",
+                },
+              },
+            }),
+          ]);
+          logger.info(`[RefundWorker] Payment ${razorpayPaymentId} already fully refunded`);
+          return { status: "already_refunded" };
+        }
+
+        refundAmount = Math.min(refundAmount, refundableAmount);
+      }
+
+      refund = await razorpay.payments.refund(razorpayPaymentId, {
+        amount: refundAmount,
+        receipt: safeRefundReceipt(bookingId),
+        notes: { booking_id: bookingId, reason: String(reason ?? "Booking cancellation").slice(0, 240) },
+      });
+    } catch (razorpayErr: any) {
+      const desc = razorpayErr?.error?.description
+        ?? razorpayErr?.message
+        ?? JSON.stringify(razorpayErr);
+      logger.error(`[RefundWorker] Razorpay API error: ${desc}`, {
+        bookingId,
+        paymentId: razorpayPaymentId,
+        amount:    refundAmount,
+        statusCode: razorpayErr?.statusCode,
+        code:       razorpayErr?.error?.code,
+        raw:        razorpayErr,
+      });
+      throw new Error(desc);
+    }
 
     await prisma.$transaction([
       
@@ -65,7 +137,7 @@ try {
         data:  {
           refund_id:     refund.id,
           refund_status: "PROCESSING",
-          refund_amount: amount,
+          refund_amount: refundAmount,
         },
       }),
       
@@ -73,7 +145,7 @@ try {
         data: {
           booking_id: bookingId,
           event_type: "REFUND_INITIATED",
-          event_data: { refund_id: refund.id, amount, reason },
+          event_data: { refund_id: refund.id, amount: refundAmount, reason },
         },
       }),
     ]);
@@ -116,6 +188,7 @@ refundWorker.on("error", (err) => {
 export async function handleRefundWebhookConfirmed(
   razorpayPaymentId: string,
   refundId: string,
+  refundAmount?: number,
 ): Promise<void> {
 
   const payment = await prisma.payment.findFirst({
@@ -143,8 +216,15 @@ export async function handleRefundWebhookConfirmed(
         refund_status: "DONE",
         refund_id: refundId,
         status: "REFUNDED",
-        refund_amount: payment.amount,   
-  refunded_at: new Date(),
+        refund_amount: refundAmount ?? payment.refund_amount ?? payment.amount,
+        refunded_at: new Date(),
+      },
+    }),
+    prisma.bookingEvent.create({
+      data: {
+        booking_id: payment.booking_id,
+        event_type: "REFUND_COMPLETED",
+        event_data: { refund_id: refundId, amount: refundAmount ?? payment.refund_amount ?? payment.amount },
       },
     }),
   ]);
@@ -192,4 +272,38 @@ if (bookingWithCustomer?.customer?.user?.id) {
     status: 'REFUNDED',
   });
 }
+}
+
+export async function handleRefundWebhookCreated(
+  razorpayPaymentId: string,
+  refundId: string,
+  refundAmount?: number,
+): Promise<void> {
+  const payment = await prisma.payment.findFirst({
+    where: { razorpay_payment_id: razorpayPaymentId },
+  });
+
+  if (!payment || payment.refund_status === "DONE") return;
+
+  await prisma.$transaction([
+    prisma.booking.update({
+      where: { id: payment.booking_id },
+      data:  { status: "REFUND_INITIATED" },
+    }),
+    prisma.payment.update({
+      where: { id: payment.id },
+      data:  {
+        refund_id:     refundId,
+        refund_status: "PROCESSING",
+        refund_amount: refundAmount ?? payment.refund_amount ?? payment.amount,
+      },
+    }),
+    prisma.bookingEvent.create({
+      data: {
+        booking_id: payment.booking_id,
+        event_type: "REFUND_INITIATED",
+        event_data: { refund_id: refundId, amount: refundAmount ?? payment.refund_amount ?? payment.amount },
+      },
+    }),
+  ]);
 }

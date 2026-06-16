@@ -342,7 +342,7 @@ export class OwnerHolidayService {
             data:  {
               status:              "CANCELLED",
               cancelled_at:        now,
-              cancelled_by:        "business",
+              cancelled_by:        "OWNER",
               cancellation_reason: `Business holiday: ${holiday_name}`,
             },
           });
@@ -356,7 +356,6 @@ export class OwnerHolidayService {
             await tx.payment.update({
               where: { booking_id: booking.id },
               data:  {
-                status:        "REFUNDED",
                 refund_amount: booking.payment.amount,
                 refund_status: "PROCESSING",
                 refund_reason: `Business holiday: ${holiday_name}`,
@@ -385,25 +384,27 @@ export class OwnerHolidayService {
 
         // Enqueue Razorpay refund (outside transaction — external API call)
         if (booking.payment?.razorpay_payment_id && booking.payment?.status === "PAID") {
+          const safeId = String(booking.id).replace(/:/g, "-");
           await refundQueue.add(
-            `refund:${booking.id}`,
+            `refund-${safeId}`,
             {
               bookingId: booking.id,
               paymentId: booking.payment.razorpay_payment_id,
               amount:    booking.payment.amount,
               reason:    `Business holiday: ${holiday_name}`,
             },
-            { jobId: `refund:${booking.id}`, attempts: 5 },
+            { jobId: `refund-${safeId}`, attempts: 5 },
           ).catch(() => {});
         }
 
         // Cancel BullMQ scheduled jobs for this booking
+        const safeId = String(booking.id).replace(/:/g, "-");
         await Promise.allSettled([
-          bookingQueue.getJob(`payment-timeout:${booking.id}`).then(j => j?.remove()).catch(() => {}),
-          bookingQueue.getJob(`no-show:${booking.id}`).then(j => j?.remove()).catch(() => {}),
-          settleQueue.getJob(`settle:${booking.id}`).then(j => j?.remove()).catch(() => {}),
-          notificationQueue.getJob(`reminder-1hr:${booking.id}`).then(j => j?.remove()).catch(() => {}),
-          notificationQueue.getJob(`reminder-15min:${booking.id}`).then(j => j?.remove()).catch(() => {}),
+          bookingQueue.getJob(`payment-timeout-${safeId}`).then(j => j?.remove()).catch(() => {}),
+          bookingQueue.getJob(`no-show-${safeId}`).then(j => j?.remove()).catch(() => {}),
+          settleQueue.getJob(`settle-${safeId}`).then(j => j?.remove()).catch(() => {}),
+          notificationQueue.getJob(`reminder-1hr-${safeId}`).then(j => j?.remove()).catch(() => {}),
+          notificationQueue.getJob(`reminder-15min-${safeId}`).then(j => j?.remove()).catch(() => {}),
         ]);
 
         // Real-time notification to customer
