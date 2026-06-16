@@ -47,8 +47,12 @@ function getTransporter(): Transporter {
     host:   "smtp.gmail.com",
     port:   587,
     secure: false,
-    // ✅ FIX: Force IPv4 to avoid IPv6 ENETUNREACH errors on some hosts
+    // ✅ FIX: Force IPv4 to avoid IPv6 ENETUNREACH errors on Render
     family: 4,
+    // ✅ Additional connection options for stability
+    connectionTimeout: 10000,
+    greetingTimeout: 5000,
+    socketTimeout: 15000,
     auth: {
       user: serverConfig.MAIL_USER,
       pass: serverConfig.MAIL_PASS,
